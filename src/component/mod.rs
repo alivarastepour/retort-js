@@ -56,5 +56,19 @@ pub mod component_mod {
         pub fn set_presenter(&mut self, presenter: Presenter) {
             self.presenter = Box::new(presenter);
         }
+
+        pub fn render(&self) {
+            let presenter = &*self.presenter;
+            match presenter {
+                Presenter::Component(component) => {
+                    component.render();
+                }
+                Presenter::Markup(markup) => {
+
+                    //some formatting needs to be done according to state
+                }
+                Presenter::Nothing() => {}
+            }
+        }
     }
 }

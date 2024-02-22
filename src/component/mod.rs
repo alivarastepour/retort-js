@@ -1,6 +1,10 @@
 pub mod component_mod {
+    use std::collections::HashMap;
+
     use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
+    use serde_json::{from_str, Value};
+    use strfmt::strfmt;
     use wasm_bindgen::prelude::wasm_bindgen;
 
     #[derive(Serialize, Deserialize)]
@@ -10,6 +14,23 @@ pub mod component_mod {
         presenter: Box<Presenter>,
         props: String,
     }
+
+    // impl Into<HashMap<String, String>> for serde_json::Map<std::string::String, Value> {
+    //     fn into(self) -> HashMap<String, String> {
+
+    //     }
+    // }
+
+    // fn into_hashamp(map: &serde_json::Map<std::string::String, Value>) -> HashMap<String, String> {
+    //     let res: HashMap<String, String> = HashMap::new();
+    //     for (k, v) in map {
+    //         match v {
+    //             // Value::
+    //         }
+    //         res.insert(k.to_owned(), v.to_owned());
+    //     }
+    //     res
+    // }
 
     #[wasm_bindgen]
     impl Component {
@@ -64,6 +85,21 @@ pub mod component_mod {
                     component.render();
                 }
                 Presenter::Markup(markup) => {
+                    let state = &self.state;
+                    let state_object: Value = from_str(&state).unwrap();
+                    match state_object {
+                        // Value::Array(arr) => {}
+                        // Value::Bool(b) => {}
+                        // Value::Null => {}
+                        // Value::Number(num) => {}
+                        Value::Object(obj) => {
+                            let a = obj.get("a");
+                            // let formatted_markup = strfmt(&markup, &into_hashamp(&obj));
+                        }
+                        _ => {
+                            // not a legal state
+                        } // Value::String(st) => {}
+                    }
 
                     //some formatting needs to be done according to state
                 }

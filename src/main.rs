@@ -1,5 +1,3 @@
-use std::iter;
-
 use serde_json::{from_str, Map, Value};
 
 // fn into_hashamp(map: &serde_json::Map<std::string::String, Value>) -> HashMap<String, String> {
@@ -13,51 +11,13 @@ use serde_json::{from_str, Map, Value};
 //     res
 // }
 
-fn unwrap_value(value: &Value) -> Value {
-    match value {
-        Value::String(obj) => Value::String(obj.to_owned()),
-        Value::Object(obj) => Value::Object(obj.to_owned()),
-        _ => Value::Null,
-    }
-}
-
-fn obj_key_path_to_value(map: Map<String, Value>, path: String) -> String {
-    let mut iterator = path.split('.');
-    let iterator_vec: &Vec<&str> = &iterator.collect();
-    let len = iterator_vec.len();
-    let mut a = 1;
-    // while let val = iterator.next() {
-    //     match val {
-    //         Option::None => {}
-    //         Option::Some(v) => {
-    //             println!("{a} : {v}")
-    //         }
-    //     }
-    // }
-    loop {
-        let val = iterator.next();
-        match val {
-            Option::None => {
-                break;
-            }
-            Option::Some(v) => {
-                let map_item = map.get(v);
-                match map_item {
-                    Option::None => {}
-                    Option::Some(value_pair) => {}
-                }
-            }
-        }
-    }
-    // path : a.b.c.d...z
-}
-
 fn main() {
-    println!("Hello, world!");
-    let path = "a.b.c.d.e".to_owned();
-    obj_key_path_to_value(Map::new(), path);
+    let path = "x".to_owned();
 
-    // let state = String::from("{\"a\":2, \"b\":{\"c\":2,\"d\":11}}");
+    let state = String::from("{\"a\":6, \"b\":{\"c\":2,\"d\":11}}");
+    let map: serde_json::Map<std::string::String, Value> = from_str(&state).unwrap();
+    // let res = obj_key_path_to_value(map, path);
+    // println!("res: {res}")
 
     // let state_object: Value = from_str(&state).unwrap;
     // match state_object {

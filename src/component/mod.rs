@@ -3,7 +3,7 @@ pub mod component_mod {
 
     use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, Value};
+    use serde_json::{from_str, Map, Value};
     use strfmt::strfmt;
     use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -14,6 +14,9 @@ pub mod component_mod {
         presenter: Box<Presenter>,
         props: String,
     }
+
+    const NO_VALUE: &str = "undefined";
+    const OBJ: &str = "[object]";
 
     // impl Into<HashMap<String, String>> for serde_json::Map<std::string::String, Value> {
     //     fn into(self) -> HashMap<String, String> {
@@ -78,6 +81,72 @@ pub mod component_mod {
             self.presenter = Box::new(presenter);
         }
 
+        fn obj_key_path_to_value(map: Map<String, Value>, path: String) -> String {
+            let mut mp = map.clone();
+
+            let mut iterator = path.split('.');
+            let temp_iterator = iterator.clone();
+            let iterator_vec: &Vec<&str> = &temp_iterator.collect();
+
+            let len = iterator_vec.len();
+            let mut current = 1;
+
+            let val: String = loop {
+                let val = iterator.next();
+                match val {
+                    Option::None => {
+                        break NO_VALUE.to_string();
+                    }
+                    Option::Some(v) => {
+                        let map_item = mp.get(v);
+                        match map_item {
+                            Option::None => {
+                                break NO_VALUE.to_string();
+                            }
+                            Option::Some(value_pair) => match value_pair {
+                                Value::String(st) => {
+                                    if current == len {
+                                        break st.to_string();
+                                    } else {
+                                        break NO_VALUE.to_string();
+                                    }
+                                }
+                                Value::Object(mx) => {
+                                    if current == len {
+                                        break OBJ.to_string();
+                                    } else {
+                                        mp = mx.clone();
+                                    }
+                                }
+                                Value::Number(nb) => {
+                                    if current == len {
+                                        break nb.to_string();
+                                    } else {
+                                        break NO_VALUE.to_string();
+                                    }
+                                }
+                                Value::Null => {
+                                    break NO_VALUE.to_string();
+                                }
+                                Value::Bool(bl) => {
+                                    if current == len {
+                                        break bl.to_string();
+                                    } else {
+                                        break NO_VALUE.to_string();
+                                    }
+                                }
+                                Value::Array(_) => {
+                                    break OBJ.to_string();
+                                }
+                            },
+                        }
+                    }
+                }
+                current += 1;
+            };
+            val
+        }
+
         pub fn render(&self) {
             let presenter = &*self.presenter;
             match presenter {
@@ -86,22 +155,7 @@ pub mod component_mod {
                 }
                 Presenter::Markup(markup) => {
                     let state = &self.state;
-                    let state_object: Value = from_str(&state).unwrap();
-                    match state_object {
-                        // Value::Array(arr) => {}
-                        // Value::Bool(b) => {}
-                        // Value::Null => {}
-                        // Value::Number(num) => {}
-                        Value::Object(obj) => {
-                            let a = obj.get("a");
-                            // let formatted_markup = strfmt(&markup, &into_hashamp(&obj));
-                        }
-                        _ => {
-                            // not a legal state
-                        } // Value::String(st) => {}
-                    }
-
-                    //some formatting needs to be done according to state
+                    let state_object: Map<String, Value> = from_str(&state).unwrap();
                 }
                 Presenter::Nothing() => {}
             }

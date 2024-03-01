@@ -1,12 +1,8 @@
 pub mod component_mod {
-    use std::{collections::HashMap, ops::Deref};
-
     use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, Map, Value};
-    use strfmt::strfmt;
-    use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::js_sys::Math::log;
+    use serde_json::{Map, Value};
+    use wasm_bindgen::prelude::wasm_bindgen;
 
     #[derive(Serialize, Deserialize)]
     #[wasm_bindgen]
@@ -28,23 +24,6 @@ pub mod component_mod {
             }
         }
     }
-
-    // impl Into<HashMap<String, String>> for serde_json::Map<std::string::String, Value> {
-    //     fn into(self) -> HashMap<String, String> {
-
-    //     }
-    // }
-
-    // fn into_hashamp(map: &serde_json::Map<std::string::String, Value>) -> HashMap<String, String> {
-    //     let res: HashMap<String, String> = HashMap::new();
-    //     for (k, v) in map {
-    //         match v {
-    //             // Value::
-    //         }
-    //         res.insert(k.to_owned(), v.to_owned());
-    //     }
-    //     res
-    // }
 
     #[wasm_bindgen]
     impl Component {
@@ -77,7 +56,6 @@ pub mod component_mod {
             self.props = props;
         }
 
-        // TODO: consider the reason why getter/ setters should (not)be accessible
         #[wasm_bindgen(getter)]
         pub fn presenter(&self) -> Presenter {
             *self.presenter.clone()
@@ -154,27 +132,18 @@ pub mod component_mod {
             val
         }
 
-        fn get_render_content() {}
-
         pub fn render(&self) {
             let window = web_sys::window().expect("where window?");
             let document = window.document().expect("where document?");
             let root = document.get_element_by_id("root").expect("where root?");
             let presenter = &*self.presenter;
-            // web_sys::console::log_1(&JsValue::from_str(presenter.into()));
             match presenter {
                 Presenter::Component(component) => {
-                    // root.set_inner_html("<div>component</div>");
                     component.render();
                 }
                 Presenter::Markup(markup) => {
-                    // let state = &self.state;
-                    // let state_object: Map<String, Value> = from_str(&state).unwrap();
-
                     let m = format!("<div>{markup}</div>");
                     root.set_inner_html(&m);
-
-                    // root.set_inner_html(&markup);
                 }
                 Presenter::Nothing(_) => {
                     root.set_inner_html("<div>nothing</div>");

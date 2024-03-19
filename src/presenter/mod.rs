@@ -8,6 +8,22 @@ pub mod presenter_mod {
         JsValue,
     };
 
+    /// One of the building blocks of applications that utilize the integration of Rust and Javascript
+    /// is data serialization. Data needs to be serialized so that it can be understood by the Wasm ABI
+    /// in both directions(from Javascript to Rust and vice versa). In Rust, we often use the `serde`
+    /// crate and its provided macros to handle it for us. In Javascript, we can do this by utilizing
+    /// JSON.stringify method(*).
+    ///
+    /// Presenter enum represents what a Component actually returns(presents) to the DOM. For now,
+    /// it only supports no return value, which doesn't affect the DOM; markup, which is plain HTML
+    /// markup and finally, Component, which is another Component.
+    ///
+    /// FUTURE CONSIDERATIONS
+    /// - The best case scenario, would be a support for another value, which is a mix(let's say a vector)
+    ///   of Component and Markup
+    /// - There is a string currently associated with the Nothing variant which is ignored but still
+    ///   should be taken care of. There is no such value as Null in Rust, the closest we have is the Option enum.
+    /// - *needs further investigation
     #[derive(Serialize, Deserialize)]
     pub enum Presenter {
         Component(Component),

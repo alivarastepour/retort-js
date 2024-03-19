@@ -1,5 +1,6 @@
 use scraper::{Html, Selector};
 
+
 fn main() {
     let fragment = "<div onclick=\"someFunction()\">hello</div>";
     let parsed = Html::parse_fragment(fragment);
@@ -12,6 +13,7 @@ fn main() {
             }
             Option::Some(v) => {
                 let x = v.attr("onclick").unwrap_or("ooops");
+                
                 println!("{x}");
             }
         }

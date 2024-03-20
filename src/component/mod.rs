@@ -2,14 +2,14 @@ pub mod component_mod {
 
     use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
-    use serde_json::{Map, Value};
+    use serde_json::{from_str, to_string, Error, Map, Value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{console::log_1, js_sys::Function};
 
     #[derive(Serialize, Deserialize)]
     #[wasm_bindgen]
     pub struct Component {
-        state: String,
+        state: Value,
         presenter: Box<Presenter>,
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
@@ -39,8 +39,14 @@ pub mod component_mod {
             props: String,
             component_did_mount: &Function,
         ) -> Component {
+            let state: Result<Value, Error> = from_str(&state);
+            if let Result::Err(err) = state {
+                panic!("could not convert it: {err}");
+            }
+            // log_1(&JsValue::from_str("invoked cons"));
+
             Component {
-                state,
+                state: state.unwrap(),
                 presenter: Box::new(presenter),
                 props,
                 component_did_mount: component_did_mount.clone(),
@@ -59,12 +65,33 @@ pub mod component_mod {
 
         #[wasm_bindgen(getter)]
         pub fn state(&self) -> String {
-            self.state.clone()
+            // log_1(&JsValue::from_str("invoked getter"));
+            to_string(&self.state).unwrap()
         }
 
         #[wasm_bindgen(setter)]
         pub fn set_state(&mut self, state: String) {
-            self.state = state;
+            // TODO: generalize this repeated code
+            let deserialized_state: Result<Value, Error> = from_str(&state);
+            if let Result::Err(err) = deserialized_state {
+                panic!("could not convert it: {err}");
+            }
+            self.state = deserialized_state.unwrap();
+        }
+
+        /*
+         note the importance of &mut self parameter. although it sounds implicit, removing it will
+        forbid you to use it in Javascript.
+        */
+        #[wasm_bindgen]
+        pub fn set_state_wrapper(&mut self, state: String) {
+            let deserialized_state: Result<Value, Error> = from_str(&state);
+            if let Result::Err(err) = deserialized_state {
+                panic!("could not convert it: {err}");
+            }
+            let new_state = deserialized_state.unwrap();
+            self.state = new_state;
+            // self.render();
         }
 
         #[wasm_bindgen(getter)]

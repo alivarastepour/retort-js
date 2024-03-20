@@ -1,7 +1,7 @@
 pub mod presenter_mod {
     use crate::component::component_mod::Component;
     use serde::{Deserialize, Serialize};
-    use serde_wasm_bindgen::{from_value, Error};
+    use serde_wasm_bindgen::{from_value, to_value, Error};
     use wasm_bindgen::{
         convert::{FromWasmAbi, IntoWasmAbi},
         describe::WasmDescribe,
@@ -32,6 +32,7 @@ pub mod presenter_mod {
     }
 
     impl Clone for Presenter {
+        /// Clones a Presenter variant based on its criteria
         fn clone(&self) -> Self {
             match self {
                 Presenter::Component(component) => {
@@ -44,6 +45,7 @@ pub mod presenter_mod {
         }
     }
 
+    /// rn, I have no clue why this is necessary.
     impl WasmDescribe for Presenter {
         fn describe() {
             JsValue::describe()
@@ -51,21 +53,38 @@ pub mod presenter_mod {
     }
 
     impl FromWasmAbi for Presenter {
+        /// Handles the type conversion of a value which is coming out of Wasm ABI.
+        /// The value is first converted into a JsValue and is then converted to a Presenter variant.
+        /// In case of error while converting JsValue to Presenter, the error message is wrapped inside
+        /// a Presenter::Markup for debugging purposes.
         unsafe fn from_abi(js: Self::Abi) -> Self {
-            let a = JsValue::from_abi(js);
-            let ea: Result<Presenter, Error> = from_value(a);
-            if let Result::Err(err) = ea {
+            let presenter_js_value = JsValue::from_abi(js);
+            let presenter_result: Result<Presenter, Error> = from_value(presenter_js_value);
+            if let Result::Err(err) = presenter_result {
                 return Presenter::Markup(err.to_string());
             }
-            ea.unwrap()
+            presenter_result.unwrap()
         }
+
+        /// The Abi associated type of JsValue struct in its FromWasmAbi implementation block
         type Abi = <JsValue as FromWasmAbi>::Abi;
     }
 
     impl IntoWasmAbi for Presenter {
+        /// Handles the type conversion of a value which is passing Wasm ABI.
+        /// In case of error while converting Presenter to JsValue, execution panics.
+        /// Note that using the same error handling as FromWasmAbi block may not be the
+        /// best solution since a new Presenter enum must go through the same conversion which
+        /// failed in the first place.
         fn into_abi(self) -> Self::Abi {
-            serde_wasm_bindgen::to_value(&self).unwrap().into_abi()
+            let presenter_js_value = to_value(&self);
+            if let Result::Err(err) = presenter_js_value {
+                panic!("Operation failed while converting Presenter enum to JsValue: {err}")
+            }
+            presenter_js_value.unwrap().into_abi()
         }
+
+        /// The Abi associated type of JsValue struct in its IntoWasmAbi implementation block
         type Abi = <JsValue as IntoWasmAbi>::Abi;
     }
 }

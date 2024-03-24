@@ -1,5 +1,7 @@
 pub mod component_mod {
 
+    use std::ops::Deref;
+
     use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
     use serde_json::{from_str, to_string, Error, Map, Value};
@@ -193,6 +195,19 @@ pub mod component_mod {
             match result {
                 Result::Err(_err) => false,
                 Result::Ok(_v) => true,
+            }
+        }
+
+        pub fn nest_render(&self) -> String {
+            let pr: &Presenter = self.presenter.deref();
+            match pr {
+                Presenter::Component(_comp) => return "waa".to_owned(),
+                Presenter::Markup(markup) => {
+                    return markup.to_owned();
+                }
+                Presenter::Nothing(_n) => {
+                    return "n".to_owned();
+                }
             }
         }
 

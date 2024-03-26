@@ -5,6 +5,7 @@ pub mod component_mod {
     use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
     use serde_json::{from_str, to_string, Error, Map, Value};
+    use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{console::log_1, js_sys::Function};
 
@@ -38,7 +39,7 @@ pub mod component_mod {
         pub fn new(
             state: String,
             presenter: Presenter,
-            props: String,
+            // props: String,
             component_did_mount: &Function,
         ) -> Component {
             let state: Result<Value, Error> = from_str(&state);
@@ -46,11 +47,11 @@ pub mod component_mod {
                 panic!("could not convert it: {err}");
             }
             // log_1(&JsValue::from_str("invoked cons"));
-
+            // component_did_mount.call0(&JsValue::null());
             Component {
                 state: state.unwrap(),
                 presenter: Box::new(presenter),
-                props,
+                props: "{}".to_owned(),
                 component_did_mount: component_did_mount.clone(),
             }
         }
@@ -87,6 +88,7 @@ pub mod component_mod {
         */
         #[wasm_bindgen]
         pub fn set_state_wrapper(&mut self, state: String) {
+            log_1(&JsValue::from_str(&state));
             let deserialized_state: Result<Value, Error> = from_str(&state);
             if let Result::Err(err) = deserialized_state {
                 panic!("could not convert it: {err}");
@@ -210,6 +212,32 @@ pub mod component_mod {
                 }
             }
         }
+
+        pub fn new_render(&self) -> () {
+            // return to_value(self).expect("could not convert to to value");
+            // return self.clone();
+            // Component {
+            //     // component_did_mount: self.component_did_mount
+            // }
+            // .expect("could not convert to string");
+        }
+
+        // 1- mount should be called on a root node
+        // 2- add a root field to component struct to determine if it has permission to call mount(optional)
+        // 3- mount is called with a reference to the root component
+        // 4- it calls the TBD function in JS that creates VDOM for components.
+        // 5- the JS function should look for path field in component, which represents where the actual markup resides.
+        // 6- the JS function should parse that file to create VDOM.
+        // 7- the JS function should look for imports should it reach a component call
+        // 8- for know, the info of the component is stored in VDOM, not what it returns. we are not making a unified VDOM at this stage.
+        // 9- after all markup is parsed and VDOM for each component is created, it's about time to make VDOM objects to DOM nodes.
+        // 10- at this point, we should again come back to the mount function, and start from the component which mount was called on.
+        // 11- this time we are trying to make a unified VDOM first, so we will start from root, and add only markup to the VDOM.
+        // 12- this means that we will ask components to return what their child components actually return(with state and stuff).
+        // 13- this process created a unified VDOM.
+        // 14- from here we can start creating the actual DOM.
+        // 15- I suspect if need to keep this initially created unified VDOM, since we will only work with component updates from here on, and we have VDOM of each component
+        pub fn mount(&self) {}
 
         pub fn render(&self) {
             let window = web_sys::window().expect("where window?");

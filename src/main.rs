@@ -1,27 +1,14 @@
-use scraper::{Html, Selector};
-
+mod file_util;
+use crate::file_util::file_util_mod;
+use std::env;
 
 fn main() {
-    let fragment = "<div onclick=\"someFunction()\">hello</div>";
-    let parsed = Html::parse_fragment(fragment);
-    let tree = parsed.tree.values();
-    for item in tree {
-        let val = item.as_element();
-        match val {
-            Option::None => {
-                continue;
-            }
-            Option::Some(v) => {
-                let x = v.attr("onclick").unwrap_or("ooops");
-                
-                println!("{x}");
-            }
-        }
-        // println!("{val}");
-    }
+    let val = env::current_dir().unwrap();
+    let current = val.to_str().unwrap();
+    let path = format!("{current}/test/HelloWorld/presenter.rtjs");
+    let a = file_util_mod::read_file(&path);
+    let b = a.imports;
+    let c = a.markup;
 
-    // let fragment = Html::parse_fragment(r#"<input name="foo" value="bar">"#);
-    // let selector = Selector::parse(r#"input[name="foo"]"#).unwrap();
-
-    // let input = fragment.select(&selector).next().unwrap();
+    println!("{c}");
 }

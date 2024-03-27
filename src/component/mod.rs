@@ -1,19 +1,17 @@
 pub mod component_mod {
-
-    use std::ops::Deref;
-
-    use crate::presenter::presenter_mod::Presenter;
     use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, to_string, Error, Map, Value};
-    use serde_wasm_bindgen::to_value;
+    use serde_json::{from_str, to_string, to_value, Error, Map, Value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{console::log_1, js_sys::Function};
+
+    use crate::file_util::file_util_mod::read_file;
 
     #[derive(Serialize, Deserialize)]
     #[wasm_bindgen]
     pub struct Component {
         state: Value,
-        presenter: Box<Presenter>,
+        // presenter: Box<Presenter>,
+        presenter: String,
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
@@ -38,7 +36,7 @@ pub mod component_mod {
         #[wasm_bindgen(constructor)]
         pub fn new(
             state: String,
-            presenter: Presenter,
+            presenter: String,
             // props: String,
             component_did_mount: &Function,
         ) -> Component {
@@ -50,7 +48,7 @@ pub mod component_mod {
             // component_did_mount.call0(&JsValue::null());
             Component {
                 state: state.unwrap(),
-                presenter: Box::new(presenter),
+                presenter,
                 props: "{}".to_owned(),
                 component_did_mount: component_did_mount.clone(),
             }
@@ -109,13 +107,13 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen(getter)]
-        pub fn presenter(&self) -> Presenter {
-            *self.presenter.clone()
+        pub fn presenter(&self) -> String {
+            self.presenter.clone()
         }
 
         #[wasm_bindgen(setter)]
-        pub fn set_presenter(&mut self, presenter: Presenter) {
-            self.presenter = Box::new(presenter);
+        pub fn set_presenter(&mut self, presenter: String) {
+            self.presenter = presenter;
         }
 
         fn obj_key_path_to_value(map: Map<String, Value>, path: String) -> String {
@@ -200,18 +198,18 @@ pub mod component_mod {
             }
         }
 
-        pub fn nest_render(&self) -> String {
-            let pr: &Presenter = self.presenter.deref();
-            match pr {
-                Presenter::Component(_comp) => return "waa".to_owned(),
-                Presenter::Markup(markup) => {
-                    return markup.to_owned();
-                }
-                Presenter::Nothing(_n) => {
-                    return "n".to_owned();
-                }
-            }
-        }
+        // pub fn nest_render(&self) -> String {
+        //     let pr: &Presenter = self.presenter.deref();
+        //     match pr {
+        //         Presenter::Component(_comp) => return "waa".to_owned(),
+        //         Presenter::Markup(markup) => {
+        //             return markup.to_owned();
+        //         }
+        //         Presenter::Nothing(_n) => {
+        //             return "n".to_owned();
+        //         }
+        //     }
+        // }
 
         pub fn new_render(&self) -> () {
             // return to_value(self).expect("could not convert to to value");
@@ -237,35 +235,56 @@ pub mod component_mod {
         // 13- this process created a unified VDOM.
         // 14- from here we can start creating the actual DOM.
         // 15- I suspect if need to keep this initially created unified VDOM, since we will only work with component updates from here on, and we have VDOM of each component
-        pub fn mount(&self) {}
 
-        pub fn render(&self) {
-            let window = web_sys::window().expect("where window?");
-            let document = window.document().expect("where document?");
-            let root = document.get_element_by_id("root").expect("where root?");
+        fn create_vdom(component: &mut Component, module_resolver: &Function) {
+            let component_presenter_path = &component.presenter;
+            let res = read_file(component_presenter_path);
+            // let a= JsValue::from(res);
+            // log_1(to_value(res));
+            // read content of above line's file
+            // parse the markup, look for component imports
+            // add the markup to vdom structure as is, transform modules imported from module_resolver to Component struct
+            // after that, add components to the vdom of current component as is, then call this function on the newly created components.
+            // after the execution of this function finalizes, vdom structure of all components should be prepared
+            // and we are ready to create its unified version.
 
-            let presenter = &*self.presenter;
-            match presenter {
-                Presenter::Component(component) => {
-                    component.render();
-                }
-                Presenter::Markup(markup) => {
-                    let m = format!("{markup}");
-                    root.set_inner_html(&m);
-                }
-                Presenter::Nothing(_) => {
-                    root.set_inner_html("<div>nothing</div>");
-                }
-            }
-            let component_js_value =
-                serde_wasm_bindgen::to_value(self).unwrap_or(JsValue::undefined());
-            let res = self.component_did_mount.call0(&component_js_value);
-            match res {
-                Result::Err(err) => {
-                    log_1(&err);
-                }
-                Result::Ok(_a) => {}
-            }
+            // let component = module_resolver.call1(
+            //     &JsValue::null(),
+            //     &JsValue::from_str(component_presenter_path),
+            // );
         }
+
+        pub fn mount(&mut self, module_resolver: &Function) {
+            Self::create_vdom(self, module_resolver);
+        }
+
+        // pub fn render(&self) {
+        //     let window = web_sys::window().expect("where window?");
+        //     let document = window.document().expect("where document?");
+        //     let root = document.get_element_by_id("root").expect("where root?");
+
+        //     let presenter = &*self.presenter;
+        //     match presenter {
+        //         Presenter::Component(component) => {
+        //             component.render();
+        //         }
+        //         Presenter::Markup(markup) => {
+        //             let m = format!("{markup}");
+        //             root.set_inner_html(&m);
+        //         }
+        //         Presenter::Nothing(_) => {
+        //             root.set_inner_html("<div>nothing</div>");
+        //         }
+        //     }
+        //     let component_js_value =
+        //         serde_wasm_bindgen::to_value(self).unwrap_or(JsValue::undefined());
+        //     let res = self.component_did_mount.call0(&component_js_value);
+        //     match res {
+        //         Result::Err(err) => {
+        //             log_1(&err);
+        //         }
+        //         Result::Ok(_a) => {}
+        //     }
+        // }
     }
 }

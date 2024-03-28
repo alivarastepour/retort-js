@@ -37,7 +37,6 @@ pub mod tokenizer_mod {
         markup: &Vec<char>,
         index: &mut usize,
     ) -> (String, TokenizerCurrentState) {
-        // let index: usize = index as usize;
         let max = markup.len();
         loop {
             if *index == max {
@@ -45,7 +44,6 @@ pub mod tokenizer_mod {
             }
             let current_string = markup[*index].to_string();
             let current = current_string.trim();
-            // println!("{current}");
             if current == "<" {
                 return ("<".to_owned(), TokenizerCurrentState::OpenAngleBracket);
             } else if current != "" {
@@ -60,14 +58,9 @@ pub mod tokenizer_mod {
         ("".to_owned(), TokenizerCurrentState::Unknown)
     }
 
-    fn proceed_from_open_angle_bracket(
-        markup: &Vec<char>,
-        index: &mut usize,
-    ) -> (String, TokenizerCurrentState) {
-        // let index = index as usize;
-        let max = markup.len();
-        let mut tag_name = String::from("");
-        let mut tag_start_index = MIN;
+    /// Advances `index` till it reaches the first char that doesn't match with `\s`(any whitespace char).
+    /// It will update the `index` mutable reference.
+    fn update_starting_tag_index(index: &mut usize, max: usize, markup: &Vec<char>) {
         loop {
             if *index == max {
                 break;
@@ -75,12 +68,36 @@ pub mod tokenizer_mod {
             let current_string = markup[*index].to_string();
             let current = current_string.trim();
             if current != "" {
-                tag_start_index = *index;
                 break;
             }
-            *index = *index + 1;
+            *index += 1;
         }
-        if tag_start_index == MIN {
+    }
+
+    /// Advances `index` to the end of tag name. It will update mutable references of both `index` and
+    /// `tag_name`
+    fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
+        loop {
+            let mut current = markup[*index].to_string();
+            current = current.trim().to_owned();
+            if current != "" {
+                tag_name.push_str(&current);
+                *index += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn proceed_from_open_angle_bracket(
+        markup: &Vec<char>,
+        index: &mut usize,
+    ) -> (String, TokenizerCurrentState) {
+        let max = markup.len();
+        let mut tag_name = String::from("");
+
+        update_starting_tag_index(index, max, markup);
+        if *index == max {
             return (
                 "".to_owned(),
                 TokenizerCurrentState::Error(
@@ -88,17 +105,8 @@ pub mod tokenizer_mod {
                 ),
             );
         }
-        loop {
-            let mut current = markup[tag_start_index].to_string();
-            current = current.trim().to_owned();
-            if current != "" {
-                tag_name.push_str(&current);
-                tag_start_index += 1;
-            } else {
-                break;
-            }
-        }
 
+        update_starting_tag_name(index, &mut tag_name, markup);
         let collected_tag_name: Vec<char> = tag_name.chars().collect();
         let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphabetic());
         if !is_valid_string {
@@ -110,8 +118,8 @@ pub mod tokenizer_mod {
             );
         }
         let first_letter = collected_tag_name[0];
-        let is_upper_case = first_letter.is_uppercase();
-        if is_upper_case {
+        let is_uppercase = first_letter.is_uppercase();
+        if is_uppercase {
             return (tag_name, TokenizerCurrentState::Component);
         } else {
             return (tag_name, TokenizerCurrentState::Tag);

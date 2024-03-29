@@ -137,16 +137,71 @@ pub mod tokenizer_mod {
         }
     }
 
-    fn proceed_from_tag_name(markup: &Vec<char>, index: &mut usize) {
+    fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
-        // let mut key_value_pair
         update_starting_tag_index(index, max, markup);
         if markup[*index] == '>' {
+            CurrentState {
+                token: ">".to_owned(),
+                state: TokenizerState::CloseAngleBracket,
+            }
         } else if markup[*index] == '/' {
+            *index += 1; // we want to check if the char after `/` is `>` or not, so we must advance
+                         // the index by one; otherwise, call to `update_starting_tag_index`` won't advance the index
+                         // because it currently stands at a non-whitespace char(/).
+            update_starting_tag_index(index, max, markup);
+            let has_closing_angle_bracket = markup[*index] == '>';
+            if has_closing_angle_bracket {
+                CurrentState {
+                    state: TokenizerState::SelfClosingAngleBracket,
+                    token: "/>".to_owned(),
+                }
+            } else {
+                CurrentState {
+                    state: TokenizerState::Error(
+                        "Expected a closing angle bracket, but did not find it.".to_owned(),
+                    ),
+                    token: "error".to_owned(),
+                }
+            }
         } else {
+            let mut key_value_pair = String::from("");
+            loop {
+                if *index == max {
+                    break;
+                }
+                let mut current = markup[*index].to_string(); // todo: generalize this shit
+                current = current.trim().to_owned();
+                if current == ">" || current == "/" {
+                    *index -= 1;
+                    break;
+                } else if current != "" {
+                    key_value_pair.push_str(&current);
+                } else {
+                    break;
+                    // doesn't account for whitespace between key and value e.g., x =   {y}
+                }
+                *index += 1;
+            }
+
+            if key_value_pair == "" {
+                return CurrentState {
+                    state:TokenizerState::Error("This should not have happened. A value was supposed to exist, but it didn't.".to_owned()),token:"".to_owned()
+                };
+            } else {
+                return CurrentState {
+                    state: TokenizerState::Props,
+                    token: key_value_pair,
+                };
+            }
         }
     }
-    fn proceed_from_component_name(markup: &Vec<char>, index: &mut usize) {}
+    fn proceed_from_component_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
+        proceed_from_name(markup, index)
+    }
+    fn proceed_from_tag_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
+        proceed_from_name(markup, index)
+    }
 
     pub fn tokenizer(markup: String) -> impl FnMut() -> CurrentState {
         let mut current_index: usize = 0;
@@ -154,7 +209,7 @@ pub mod tokenizer_mod {
         let mut state: TokenizerState = TokenizerState::Uninitialized;
         let next = move || match state {
             TokenizerState::Uninitialized => {
-                println!("current index is: {current_index}");
+                // println!("current index is: {current_index}");
                 let CurrentState {
                     token,
                     state: state_,
@@ -167,11 +222,49 @@ pub mod tokenizer_mod {
                 };
             }
             TokenizerState::OpenAngleBracket => {
-                println!("current index is: {current_index}");
+                // println!("current index is: {current_index}");
                 let CurrentState {
                     token,
                     state: state_,
                 } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::Tag => {
+                // println!("current index is: {current_index}");
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_tag_name(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::Component => {
+                // println!("current index is: {current_index}");
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_component_name(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::Props => {
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_tag_name(&collected_markup, &mut current_index);
                 state = state_;
                 current_index += 1;
                 return CurrentState {

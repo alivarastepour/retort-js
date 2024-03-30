@@ -17,13 +17,6 @@ pub mod tokenizer_mod {
         Error(String),
     }
 
-    pub enum PropValueWrapperChar {
-        OpenCurlyBracket,
-        DoubleQuotation,
-        SingleQuotation,
-        Error(String),
-    }
-
     pub struct CurrentState {
         pub state: TokenizerState,
         pub token: String,
@@ -146,14 +139,6 @@ pub mod tokenizer_mod {
         }
     }
 
-    // fn new_proceed_from_name(markup: &Vec<char>, index: &mut usize){
-    //     let max = markup.len();
-    //     let
-    //     loop {
-
-    //     }
-    // }
-
     fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         let max = markup.len();
         let mut key_value_pair = String::from("");
@@ -166,10 +151,10 @@ pub mod tokenizer_mod {
             if current != "" {
                 key_value_pair.push_str(&current);
             }
-            *index += 1;
             if current == "=" {
                 break;
             }
+            *index += 1;
         }
         return key_value_pair;
     }
@@ -179,71 +164,35 @@ pub mod tokenizer_mod {
         update_starting_tag_index(index, max, markup);
     }
 
-    fn get_prop_wrapper_char(
-        index: &mut usize,
-        markup: &Vec<char>,
-    ) -> (char, PropValueWrapperChar) {
-        let mut current = markup[*index].to_string(); // todo: generalize this shit
-        current = current.trim().to_owned();
-        *index += 1;
-        match current.as_str() {
-            "\"" => ('"',PropValueWrapperChar::DoubleQuotation),
-            "'" => ('\'',PropValueWrapperChar::SingleQuotation),
-            "{" => ('{',PropValueWrapperChar::OpenCurlyBracket),
-            _ => (' ',PropValueWrapperChar::Error(
-                "`{_}` is not a valid wrapper for value of attributes or props. Wrap values inside `\"\"`, `''` or `{{}}`".to_owned(),
-            )),
-        }
-    }
-
-    fn get_expected_value_end_char(value_start_char: &PropValueWrapperChar) -> String {
-        let res;
-        match value_start_char {
-            PropValueWrapperChar::DoubleQuotation => {
-                res = "\"";
-            }
-            PropValueWrapperChar::Error(_err) => {
-                res = "";
-            }
-            PropValueWrapperChar::OpenCurlyBracket => {
-                res = "}";
-            }
-            PropValueWrapperChar::SingleQuotation => {
-                res = "'";
-            }
-        }
-
-        return res.to_owned();
-    }
-
     fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         advance_to_prop_wrapper(index, markup);
-        let (chr, value_wrapper) = get_prop_wrapper_char(index, markup);
-        let expected_value_end_char = get_expected_value_end_char(&value_wrapper);
-        if let PropValueWrapperChar::Error(err) = value_wrapper {
-            // ? what to do
-            panic!("wtf"); //todo
+        let value_wrapper = markup[*index];
+        if value_wrapper != '{' {
+            panic!("Value of props and attributes must be wrapped around curly braces. Provided char was {value_wrapper}")
         }
-        let mut value = String::from(chr);
+        let mut value = String::from("");
         let max = markup.len();
         let mut wrapper_stack: Vec<String> = Vec::new();
         loop {
             if *index == max {
                 break;
-            } // todo : quote marks are no different in the opening or closing variant and that's
-              // not handled
+            }
             let mut current = markup[*index].to_string(); // todo: generalize this shit
-            current = current.trim().to_owned();
+            current = current.to_owned();
             value.push_str(&current);
-            if current == expected_value_end_char && wrapper_stack.is_empty() {
-                // value.push_str(&current);
-                *index += 1;
-                break;
-            } else if current == expected_value_end_char {
-                // value.push_str(&current);
+            if current == "{" {
+                wrapper_stack.push(current);
+            } else if current == "}" {
                 wrapper_stack.pop();
             }
+            if wrapper_stack.is_empty() {
+                break;
+            }
+
             *index += 1;
+        }
+        if !wrapper_stack.is_empty() {
+            panic!("Could not parse props/attributes properly. You have probably messed up with some curly brackets.");
         }
         value
     }
@@ -277,59 +226,9 @@ pub mod tokenizer_mod {
             }
         } else {
             let key = read_key_of_prop(index, markup);
+            *index += 1;
             let value = read_value_of_prop(index, markup);
             let key_value_pair = key + &value;
-            // loop {
-            //     if *index == max {
-            //         break;
-            //     }
-            //     let mut current = markup[*index].to_string(); // todo: generalize this shit
-            //     current = current.trim().to_owned();
-            //     if current != "" {
-            //         key_value_pair.push_str(&current);
-            //     }
-            //     *index += 1;
-            //     if current == "=" {
-            //         break;
-            //     }
-            // }
-            // update_starting_tag_index(index, max, markup);
-            // let mut current = markup[*index].to_string(); // todo: generalize this shit
-            // current = current.trim().to_owned();
-            // *index += 1;
-            // let mut value_wrapper = String::from("err");
-
-            // if current == "\"" {
-            //     value_wrapper = "dq".to_owned();
-            // } else if current == "'" {
-            //     value_wrapper = "sq".to_owned();
-            // } else if current == "{" {
-            //     value_wrapper = "br".to_owned();
-            // }
-            // loop {
-            //     if *index == max {
-            //         break;
-            //     }
-            //     let mut current = markup[*index].to_string(); // todo: generalize this shit
-            //     current = current.trim().to_owned();
-            // }
-            // loop {
-            //     if *index == max {
-            //         break;
-            //     }
-            //     let mut current = markup[*index].to_string(); // todo: generalize this shit
-            //     current = current.trim().to_owned();
-            //     if current == ">" || current == "/" {
-            //         *index -= 1;
-            //         break;
-            //     } else if current != "" {
-            //         key_value_pair.push_str(&current);
-            //     } else {
-            //         break;
-            //         // doesn't account for whitespace between key and value e.g., x =   {y}
-            //     }
-            //     *index += 1;
-            // }
 
             if key_value_pair == "" {
                 return CurrentState {
@@ -419,6 +318,18 @@ pub mod tokenizer_mod {
                     state: state.clone(),
                 };
             }
+            // TokenizerState::SelfClosingAngleBracket => {
+            //     let CurrentState {
+            //         token,
+            //         state: state_,
+            //     } = proceed_from_tag_name(&collected_markup, &mut current_index);
+            //     state = state_;
+            //     current_index += 1;
+            //     return CurrentState {
+            //         token,
+            //         state: state.clone(),
+            //     };
+            // }
             TokenizerState::Finalized => CurrentState {
                 token: "".to_owned(),
                 state: state.clone(),

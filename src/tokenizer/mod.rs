@@ -142,6 +142,40 @@ pub mod tokenizer_mod {
         }
     }
 
+    /// Determines the type of token after tag's name is built.
+    fn get_state_after_tag_name(tag_name: String) -> CurrentState {
+        let collected_tag_name: Vec<char> = tag_name.chars().collect();
+        let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphabetic());
+        if !is_valid_string {
+            return CurrentState {
+                token: "".to_owned(),
+                state: TokenizerState::Error(
+                    format!("Provided tag name `{tag_name}` contains invalid characters.")
+                        .to_owned(),
+                ),
+            };
+        }
+        let first_letter = collected_tag_name[0];
+        let is_uppercase = first_letter.is_uppercase();
+        if is_uppercase {
+            return CurrentState {
+                token: tag_name,
+                state: TokenizerState::Component,
+            };
+        } else {
+            return CurrentState {
+                token: tag_name,
+                state: TokenizerState::Tag,
+            };
+        }
+    }
+
+    /// Tokenize `markup` char vector starting from `index` while the current state is OpenAngleBracket.
+    /// OpenAngleBracket is used to show one of the below scenarios:
+    /// 1- Encountered a '<' char which is a tag's opening; like '<div>' at index 0.
+    /// 2- Encountered a '<' char which is a tag's closing: like '</div>' at index 0.
+    /// This function is responsible for advancing `index` till it reaches the char that shows the last
+    /// tokenized char, which is returned in the `token` field.
     fn proceed_from_open_angle_bracket(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
         let mut tag_name = String::from("");
@@ -157,31 +191,7 @@ pub mod tokenizer_mod {
         }
 
         update_starting_tag_name(index, &mut tag_name, markup);
-        let collected_tag_name: Vec<char> = tag_name.chars().collect();
-        let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphabetic());
-        if !is_valid_string {
-            return CurrentState {
-                token: "".to_owned(),
-                state: TokenizerState::Error(
-                    format!("Provided tag name `{tag_name}` contains invalid characters.")
-                        .to_owned(),
-                ),
-            };
-        }
-        let first_letter = collected_tag_name[0];
-        // println!("fl is : {first_letter}");
-        let is_uppercase = first_letter.is_uppercase();
-        if is_uppercase {
-            return CurrentState {
-                token: tag_name,
-                state: TokenizerState::Component,
-            };
-        } else {
-            return CurrentState {
-                token: tag_name,
-                state: TokenizerState::Tag,
-            };
-        }
+        return get_state_after_tag_name(tag_name);
     }
 
     fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {

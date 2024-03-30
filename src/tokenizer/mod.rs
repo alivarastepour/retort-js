@@ -6,6 +6,9 @@ pub mod tokenizer_mod {
     const SELF_CLOSING_TAG: &str = "/>";
     const CLOSING_TAG: &str = "</";
     const WHITESPACE_ALIAS: &str = "";
+    const PROP_KEY_VALUE_SEPARATOR: &str = "=";
+    const OPEN_CURLY_BRACKET: &str = "{";
+    const CLOSE_CURLY_BRACKET: &str = "}";
     pub enum TokenizerState {
         Uninitialized,
         OpenAngleBracket,        // <
@@ -194,39 +197,43 @@ pub mod tokenizer_mod {
         return get_state_after_tag_name(tag_name);
     }
 
+    /// This function returns a String which is supposed to be a key for a key-value pair of props
+    /// or attributes like `alt={"This is an image"}`.
+    /// This function is responsible for advancing `index` till it reaches the char that shows the last
+    /// tokenized char, which in this context, is supposed to be PROP_KEY_VALUE_SEPARATOR.
     fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         let max = markup.len();
-        let mut key_value_pair = String::from("");
+        let mut key = String::from("");
         loop {
             if *index == max {
                 break;
             }
-            let mut current = markup[*index].to_string(); // todo: generalize this shit
+            let mut current = markup[*index].to_string(); // TODO: generalize this shit
             current = current.trim().to_owned();
-            if current != "" {
-                key_value_pair.push_str(&current);
+            if current != WHITESPACE_ALIAS {
+                key.push_str(&current);
             }
-            if current == "=" {
+            if current == PROP_KEY_VALUE_SEPARATOR {
                 break;
             }
             *index += 1;
         }
-        return key_value_pair;
+        return key;
     }
 
-    fn advance_to_prop_wrapper(index: &mut usize, markup: &Vec<char>) {
+    /// This function returns a String which is supposed to be the value for  key-value pair of props
+    /// or attributes like `alt={"This is an image"}`.
+    /// This function is responsible for advancing `index` till it reaches the char that shows the last
+    /// tokenized char, which in this context, is supposed to be CLOSE_CURLY_BRACKET.
+    fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
-    }
 
-    fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
-        advance_to_prop_wrapper(index, markup);
-        let value_wrapper = markup[*index];
-        if value_wrapper != '{' {
+        let value_wrapper = markup[*index].to_string();
+        if value_wrapper != OPEN_CURLY_BRACKET {
             panic!("Value of props and attributes must be wrapped around curly braces. Provided char was {value_wrapper}")
         }
         let mut value = String::from("");
-        let max = markup.len();
         let mut wrapper_stack: Vec<String> = Vec::new();
         loop {
             if *index == max {
@@ -235,9 +242,9 @@ pub mod tokenizer_mod {
             let mut current = markup[*index].to_string(); // todo: generalize this shit
             current = current.to_owned();
             value.push_str(&current);
-            if current == "{" {
+            if current == OPEN_CURLY_BRACKET {
                 wrapper_stack.push(current);
-            } else if current == "}" {
+            } else if current == CLOSE_CURLY_BRACKET {
                 wrapper_stack.pop();
             }
             if wrapper_stack.is_empty() {
@@ -252,6 +259,7 @@ pub mod tokenizer_mod {
         value
     }
 
+    /// --
     fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);

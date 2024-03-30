@@ -1,13 +1,12 @@
 pub mod tokenizer_mod {
-    use std::usize::MIN;
-
-    use serde::de::value;
+    use serde_json::value::Index;
 
     pub enum TokenizerState {
         Uninitialized,
-        OpenAngleBracket,
-        CloseAngleBracket,
-        SelfClosingAngleBracket,
+        OpenAngleBracket,        // <
+        CloseAngleBracket,       // >
+        SelfClosingAngleBracket, // />
+        ClosingAngleBracket,     // </
         Tag,
         Component,
         Props,
@@ -35,6 +34,7 @@ pub mod tokenizer_mod {
                 Self::Unknown => Self::Unknown,
                 Self::Tag => Self::Tag,
                 Self::Component => Self::Component,
+                Self::ClosingAngleBracket => Self::ClosingAngleBracket,
                 Self::Error(err) => Self::Error(err.clone()),
             }
         }
@@ -42,23 +42,41 @@ pub mod tokenizer_mod {
 
     pub fn proceed_from_uninitialized(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
+        let mut text = String::from("");
         loop {
             if *index == max {
                 break;
             }
-            let current_string = markup[*index].to_string();
-            let current = current_string.trim();
-            if current == "<" {
-                return CurrentState {
-                    token: "<".to_owned(),
-                    state: TokenizerState::OpenAngleBracket,
-                };
-            } else if current != "" {
-                // TODO: handle error case?
-                return CurrentState {
-                    token: markup.into_iter().collect(),
-                    state: TokenizerState::Finalized,
-                };
+            let current = markup[*index].to_string();
+            // let current = current_string.trim();
+
+            if current != "<" {
+                text.push_str(&current);
+            } else {
+                if text == "" {
+                    let temp = index.clone();
+                    *index += 1;
+                    update_starting_tag_index(index, max, markup);
+                    let current_string = markup[*index].to_string();
+                    let current = current_string.trim();
+                    if current == "/" {
+                        return CurrentState {
+                            token: "</".to_owned(),
+                            state: TokenizerState::ClosingAngleBracket,
+                        };
+                    }
+                    *index = temp;
+                    return CurrentState {
+                        state: TokenizerState::OpenAngleBracket,
+                        token: "<".to_owned(),
+                    };
+                } else {
+                    *index -= 1; // We decrement index here because it now stands on `<`, while it should stand on the last index of returned token.
+                    return CurrentState {
+                        state: TokenizerState::Text,
+                        token: text,
+                    };
+                }
             }
             *index = *index + 1;
         }
@@ -90,10 +108,11 @@ pub mod tokenizer_mod {
         loop {
             let mut current = markup[*index].to_string();
             current = current.trim().to_owned();
-            if current != "" {
+            if current != "" && current != ">" {
                 tag_name.push_str(&current);
                 *index += 1;
             } else {
+                *index -= 1;
                 break;
             }
         }
@@ -120,11 +139,13 @@ pub mod tokenizer_mod {
             return CurrentState {
                 token: "".to_owned(),
                 state: TokenizerState::Error(
-                    "Provided tag name '{tag_name}' contains invalid characters.".to_owned(),
+                    format!("Provided tag name `{tag_name}` contains invalid characters.")
+                        .to_owned(),
                 ),
             };
         }
         let first_letter = collected_tag_name[0];
+        // println!("fl is : {first_letter}");
         let is_uppercase = first_letter.is_uppercase();
         if is_uppercase {
             return CurrentState {
@@ -255,7 +276,6 @@ pub mod tokenizer_mod {
         let mut state: TokenizerState = TokenizerState::Uninitialized;
         let next = move || match state {
             TokenizerState::Uninitialized => {
-                // println!("current index is: {current_index}");
                 let CurrentState {
                     token,
                     state: state_,
@@ -268,7 +288,6 @@ pub mod tokenizer_mod {
                 };
             }
             TokenizerState::OpenAngleBracket => {
-                // println!("current index is: {current_index}");
                 let CurrentState {
                     token,
                     state: state_,
@@ -282,6 +301,8 @@ pub mod tokenizer_mod {
             }
             TokenizerState::Tag => {
                 // println!("current index is: {current_index}");
+                // let a = collected_markup[current_index];
+                // println!("ayaaa {a}");
                 let CurrentState {
                     token,
                     state: state_,
@@ -295,6 +316,7 @@ pub mod tokenizer_mod {
             }
             TokenizerState::Component => {
                 // println!("current index is: {current_index}");
+                // println!("here");
                 let CurrentState {
                     token,
                     state: state_,
@@ -318,18 +340,54 @@ pub mod tokenizer_mod {
                     state: state.clone(),
                 };
             }
-            // TokenizerState::SelfClosingAngleBracket => {
-            //     let CurrentState {
-            //         token,
-            //         state: state_,
-            //     } = proceed_from_tag_name(&collected_markup, &mut current_index);
-            //     state = state_;
-            //     current_index += 1;
-            //     return CurrentState {
-            //         token,
-            //         state: state.clone(),
-            //     };
-            // }
+            TokenizerState::SelfClosingAngleBracket => {
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_uninitialized(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::CloseAngleBracket => {
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_uninitialized(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::Text => {
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_uninitialized(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::ClosingAngleBracket => {
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
             TokenizerState::Finalized => CurrentState {
                 token: "".to_owned(),
                 state: state.clone(),

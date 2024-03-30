@@ -1,6 +1,11 @@
 pub mod tokenizer_mod {
-    use serde_json::value::Index;
 
+    const OPEN_ANGLE_BRACKET: &str = "<";
+    const CLOSE_ANGLE_BRACKET: &str = ">";
+    const FORWARD_SLASH: &str = "/";
+    const SELF_CLOSING_TAG: &str = "/>";
+    const CLOSING_TAG: &str = "</";
+    const WHITESPACE_ALIAS: &str = "";
     pub enum TokenizerState {
         Uninitialized,
         OpenAngleBracket,        // <
@@ -24,65 +29,84 @@ pub mod tokenizer_mod {
     impl Clone for TokenizerState {
         fn clone(&self) -> Self {
             match self {
-                Self::CloseAngleBracket => Self::CloseAngleBracket,
                 Self::Uninitialized => Self::Uninitialized,
                 Self::OpenAngleBracket => Self::OpenAngleBracket,
                 Self::SelfClosingAngleBracket => Self::SelfClosingAngleBracket,
+                Self::ClosingAngleBracket => Self::ClosingAngleBracket,
+                Self::CloseAngleBracket => Self::CloseAngleBracket,
+                Self::Tag => Self::Tag,
                 Self::Props => Self::Props,
                 Self::Text => Self::Text,
                 Self::Finalized => Self::Finalized,
-                Self::Unknown => Self::Unknown,
-                Self::Tag => Self::Tag,
                 Self::Component => Self::Component,
-                Self::ClosingAngleBracket => Self::ClosingAngleBracket,
+                Self::Unknown => Self::Unknown,
                 Self::Error(err) => Self::Error(err.clone()),
             }
         }
     }
 
+    /// Determines the type of token after encountering a `<` char at uninitialized state, as it can be
+    /// a ClosingTag, an OpenAngleBracket or a Text variant.
+    /// This function is responsible for advancing `index` till it reaches the char that shows the last
+    /// tokenized char, which is returned in the `token` field.
+    fn get_state_after_open_angle_bracket(
+        text: String,
+        index: &mut usize,
+        markup: &Vec<char>,
+    ) -> CurrentState {
+        let max = markup.len();
+        if text == "" {
+            let temp = index.clone(); // Cloning index helps us restore to before our assumption about the existence of `/` char.
+            *index += 1;
+            update_starting_tag_index(index, max, markup);
+            let current_string = markup[*index].to_string();
+            let current = current_string.trim();
+            if current == FORWARD_SLASH {
+                return CurrentState {
+                    token: CLOSING_TAG.to_owned(),
+                    state: TokenizerState::ClosingAngleBracket,
+                };
+            }
+            *index = temp;
+            return CurrentState {
+                state: TokenizerState::OpenAngleBracket,
+                token: OPEN_ANGLE_BRACKET.to_owned(),
+            };
+        } else {
+            *index -= 1; // We decrement index here because it now stands on `<`, while it should stand on the last index of returned token.
+            return CurrentState {
+                state: TokenizerState::Text,
+                token: text,
+            };
+        }
+    }
+
+    /// Tokenize `markup` char vector starting from `index` while the current state is uninitialized.
+    /// Uninitialized is used to show one of the below scenarios:
+    /// 1- When tokenization has just started.
+    /// 2- when tokenization has reached one of these states: TokenizerState::CloseAngleBracket,
+    ///    TokenizerState::Text, TokenizerState::SelfClosingAngleBracket, and TokenizerState::Uninitialized.
+    ///    This is because tokenization is dealt with in the same manner for all above states.
+    /// This function is responsible for advancing `index` till it reaches the char that shows the last
+    /// tokenized char, which is returned in the `token` field.
     pub fn proceed_from_uninitialized(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
         let mut text = String::from("");
         loop {
             if *index == max {
-                break;
+                return CurrentState {
+                    state: TokenizerState::Finalized,
+                    token: "".to_owned(),
+                };
             }
             let current = markup[*index].to_string();
-            // let current = current_string.trim();
 
-            if current != "<" {
+            if current != OPEN_ANGLE_BRACKET {
                 text.push_str(&current);
             } else {
-                if text == "" {
-                    let temp = index.clone();
-                    *index += 1;
-                    update_starting_tag_index(index, max, markup);
-                    let current_string = markup[*index].to_string();
-                    let current = current_string.trim();
-                    if current == "/" {
-                        return CurrentState {
-                            token: "</".to_owned(),
-                            state: TokenizerState::ClosingAngleBracket,
-                        };
-                    }
-                    *index = temp;
-                    return CurrentState {
-                        state: TokenizerState::OpenAngleBracket,
-                        token: "<".to_owned(),
-                    };
-                } else {
-                    *index -= 1; // We decrement index here because it now stands on `<`, while it should stand on the last index of returned token.
-                    return CurrentState {
-                        state: TokenizerState::Text,
-                        token: text,
-                    };
-                }
+                return get_state_after_open_angle_bracket(text, index, markup);
             }
             *index = *index + 1;
-        }
-        CurrentState {
-            token: "".to_owned(),
-            state: TokenizerState::Unknown,
         }
     }
 

@@ -119,7 +119,7 @@ pub mod tokenizer_mod {
             }
             let current_string = markup[*index].to_string();
             let current = current_string.trim();
-            if current != "" {
+            if current != WHITESPACE_ALIAS {
                 break;
             }
             *index += 1;
@@ -132,11 +132,11 @@ pub mod tokenizer_mod {
         loop {
             let mut current = markup[*index].to_string();
             current = current.trim().to_owned();
-            if current != "" && current != ">" {
+            if current != WHITESPACE_ALIAS && current != CLOSE_ANGLE_BRACKET {
                 tag_name.push_str(&current);
                 *index += 1;
             } else {
-                *index -= 1;
+                *index -= 1; // `index` is decremented because we now stand at a whitespace alias char or `>`; but index must point to the last char of tag's name.
                 break;
             }
         }

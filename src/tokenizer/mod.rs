@@ -259,7 +259,59 @@ pub mod tokenizer_mod {
         value
     }
 
-    /// --
+    // todo: add max to functions' parameter list
+
+    /// Determines if the encountered `/` char is valid or not
+    fn get_state_after_slash(index: &mut usize, markup: &Vec<char>, max: usize) -> CurrentState {
+        *index += 1; // we want to check if the char after `/` is `>` or not, so we must advance
+                     // the index by one; otherwise, call to `update_starting_tag_index` won't advance the index
+                     // because it currently stands at a non-whitespace char(/).
+        update_starting_tag_index(index, max, markup);
+        let has_closing_angle_bracket = markup[*index] == '>';
+        if has_closing_angle_bracket {
+            CurrentState {
+                state: TokenizerState::SelfClosingAngleBracket,
+                token: "/>".to_owned(),
+            }
+        } else {
+            CurrentState {
+                state: TokenizerState::Error(
+                    "Expected a closing angle bracket, but did not find it.".to_owned(),
+                ),
+                token: "".to_owned(),
+            }
+        }
+    }
+
+    /// Returns a pair of props if its format is correct, error otherwise.
+    /// Currently, the acceptable prop format is `key={"value"}`, `key={'value'}` and `key={js expression}`
+    fn get_state_from_props(index: &mut usize, markup: &Vec<char>) -> CurrentState {
+        let key = read_key_of_prop(index, markup);
+        *index += 1; // This is for PROP_KEY_VALUE_SEPARATOR
+        let value = read_value_of_prop(index, markup);
+        let key_value_pair = key + &value;
+
+        if key_value_pair == "" {
+            return CurrentState {
+                state: TokenizerState::Error(
+                    "This should not have happened. A value was supposed to exist, but it didn't."
+                        .to_owned(),
+                ),
+                token: "".to_owned(),
+            };
+        } else {
+            return CurrentState {
+                state: TokenizerState::Props,
+                token: key_value_pair,
+            };
+        }
+    }
+
+    /// Tokenize `markup` char vector starting from `index` while the current state is Tag, Component or Prop.
+    /// This is because after a tag name or component name or even a pair of props, we expect the same set
+    /// of tokens to appear; which are CloseAngleBracket, SelfClosingAngleBracket and a pair of Props
+    /// This function is responsible for advancing `index` till it reaches the char that shows the last
+    /// tokenized char, which is returned in the `token` field.
     fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
@@ -269,47 +321,10 @@ pub mod tokenizer_mod {
                 state: TokenizerState::CloseAngleBracket,
             }
         } else if markup[*index] == '/' {
-            *index += 1; // we want to check if the char after `/` is `>` or not, so we must advance
-                         // the index by one; otherwise, call to `update_starting_tag_index`` won't advance the index
-                         // because it currently stands at a non-whitespace char(/).
-            update_starting_tag_index(index, max, markup);
-            let has_closing_angle_bracket = markup[*index] == '>';
-            if has_closing_angle_bracket {
-                CurrentState {
-                    state: TokenizerState::SelfClosingAngleBracket,
-                    token: "/>".to_owned(),
-                }
-            } else {
-                CurrentState {
-                    state: TokenizerState::Error(
-                        "Expected a closing angle bracket, but did not find it.".to_owned(),
-                    ),
-                    token: "error".to_owned(),
-                }
-            }
+            return get_state_after_slash(index, markup, max);
         } else {
-            let key = read_key_of_prop(index, markup);
-            *index += 1;
-            let value = read_value_of_prop(index, markup);
-            let key_value_pair = key + &value;
-
-            if key_value_pair == "" {
-                return CurrentState {
-                    state:TokenizerState::Error("This should not have happened. A value was supposed to exist, but it didn't.".to_owned()),token:"".to_owned()
-                };
-            } else {
-                return CurrentState {
-                    state: TokenizerState::Props,
-                    token: key_value_pair,
-                };
-            }
+            return get_state_from_props(index, markup);
         }
-    }
-    fn proceed_from_component_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
-        proceed_from_name(markup, index)
-    }
-    fn proceed_from_tag_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
-        proceed_from_name(markup, index)
     }
 
     pub fn tokenizer(markup: String) -> impl FnMut() -> CurrentState {
@@ -348,7 +363,7 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_tag_name(&collected_markup, &mut current_index);
+                } = proceed_from_name(&collected_markup, &mut current_index);
                 state = state_;
                 current_index += 1;
                 return CurrentState {
@@ -362,7 +377,7 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_component_name(&collected_markup, &mut current_index);
+                } = proceed_from_name(&collected_markup, &mut current_index);
                 state = state_;
                 current_index += 1;
                 return CurrentState {
@@ -374,7 +389,7 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_tag_name(&collected_markup, &mut current_index);
+                } = proceed_from_name(&collected_markup, &mut current_index);
                 state = state_;
                 current_index += 1;
                 return CurrentState {

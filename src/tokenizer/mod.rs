@@ -15,7 +15,8 @@ pub mod tokenizer_mod {
         CloseAngleBracket,       // >
         SelfClosingAngleBracket, // />
         ClosingAngleBracket,     // </
-        Tag,
+        TagNameOpen,
+        TagNameClose,
         Component,
         Props,
         Text,
@@ -36,7 +37,8 @@ pub mod tokenizer_mod {
                 Self::SelfClosingAngleBracket => Self::SelfClosingAngleBracket,
                 Self::ClosingAngleBracket => Self::ClosingAngleBracket,
                 Self::CloseAngleBracket => Self::CloseAngleBracket,
-                Self::Tag => Self::Tag,
+                Self::TagNameOpen => Self::TagNameOpen,
+                Self::TagNameClose => Self::TagNameClose,
                 Self::Props => Self::Props,
                 Self::Text => Self::Text,
                 Self::Finalized => Self::Finalized,
@@ -144,7 +146,7 @@ pub mod tokenizer_mod {
     }
 
     /// Determines the type of token after tag's name is built.
-    fn get_state_after_tag_name(tag_name: String) -> CurrentState {
+    fn get_state_after_tag_name(tag_name: String, caller: bool) -> CurrentState {
         let collected_tag_name: Vec<char> = tag_name.chars().collect();
         let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphabetic());
         if !is_valid_string {
@@ -164,9 +166,14 @@ pub mod tokenizer_mod {
                 state: TokenizerState::Component,
             };
         } else {
+            let state = if caller {
+                TokenizerState::TagNameOpen
+            } else {
+                TokenizerState::TagNameClose
+            };
             return CurrentState {
                 token: tag_name,
-                state: TokenizerState::Tag,
+                state,
             };
         }
     }
@@ -177,7 +184,11 @@ pub mod tokenizer_mod {
     /// 2- Encountered a '<' char which is a tag's closing: like '</div>' at index 0.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which is returned in the `token` field.
-    fn proceed_from_open_angle_bracket(markup: &Vec<char>, index: &mut usize) -> CurrentState {
+    fn proceed_from_open_angle_bracket(
+        markup: &Vec<char>,
+        index: &mut usize,
+        caller: bool,
+    ) -> CurrentState {
         let max = markup.len();
         let mut tag_name = String::from("");
 
@@ -192,7 +203,7 @@ pub mod tokenizer_mod {
         }
 
         update_starting_tag_name(index, &mut tag_name, markup);
-        return get_state_after_tag_name(tag_name);
+        return get_state_after_tag_name(tag_name, caller);
     }
 
     /// This function returns a String which is supposed to be a key for a key-value pair of props
@@ -346,7 +357,7 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index);
+                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index, true);
                 state = state_;
                 current_index += 1;
                 return CurrentState {
@@ -354,7 +365,19 @@ pub mod tokenizer_mod {
                     state: state.clone(),
                 };
             }
-            TokenizerState::Tag => {
+            TokenizerState::TagNameClose => {
+                let CurrentState {
+                    token,
+                    state: state_,
+                } = proceed_from_name(&collected_markup, &mut current_index);
+                state = state_;
+                current_index += 1;
+                return CurrentState {
+                    token,
+                    state: state.clone(),
+                };
+            }
+            TokenizerState::TagNameOpen => {
                 let CurrentState {
                     token,
                     state: state_,
@@ -430,7 +453,7 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index);
+                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index, false);
                 state = state_;
                 current_index += 1;
                 return CurrentState {

@@ -20,7 +20,6 @@ pub mod tokenizer_mod {
         Props,
         Text,
         Finalized,
-        Unknown,
         Error(String),
     }
 
@@ -42,7 +41,6 @@ pub mod tokenizer_mod {
                 Self::Text => Self::Text,
                 Self::Finalized => Self::Finalized,
                 Self::Component => Self::Component,
-                Self::Unknown => Self::Unknown,
                 Self::Error(err) => Self::Error(err.clone()),
             }
         }
@@ -357,9 +355,6 @@ pub mod tokenizer_mod {
                 };
             }
             TokenizerState::Tag => {
-                // println!("current index is: {current_index}");
-                // let a = collected_markup[current_index];
-                // println!("ayaaa {a}");
                 let CurrentState {
                     token,
                     state: state_,
@@ -372,8 +367,6 @@ pub mod tokenizer_mod {
                 };
             }
             TokenizerState::Component => {
-                // println!("current index is: {current_index}");
-                // println!("here");
                 let CurrentState {
                     token,
                     state: state_,
@@ -450,8 +443,8 @@ pub mod tokenizer_mod {
                 state: state.clone(),
             },
             _ => CurrentState {
-                token: "others".to_owned(),
-                state: TokenizerState::Unknown,
+                token: "".to_owned(),
+                state: state.clone(),
             },
         };
 

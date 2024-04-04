@@ -95,6 +95,7 @@ pub mod tokenizer_mod {
     pub fn proceed_from_uninitialized(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
         let mut text = String::from("");
+        update_starting_tag_index(index, max, markup);
         loop {
             if *index == max {
                 return CurrentState {

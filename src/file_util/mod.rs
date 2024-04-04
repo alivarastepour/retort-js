@@ -3,6 +3,10 @@ pub mod file_util_mod {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
 
+    use std::env::current_dir;
+    use wasm_bindgen::JsValue;
+    use web_sys::console::log_1;
+
     pub struct ParsedFile {
         pub markup: String,
         pub imports: HashMap<String, String>,
@@ -30,9 +34,29 @@ pub mod file_util_mod {
         res
     }
 
+    fn get_full_path(path: &String) -> String {
+        let cwd = current_dir();
+        if let Result::Err(err) = cwd {
+            let er = err.to_string();
+            log_1(&JsValue::from_str(&er));
+            panic!("Could not get current working directory. {err}")
+        }
+        let cwd_path_buf = cwd.unwrap();
+        let cwd_option = cwd_path_buf.to_str();
+        if let Option::None = cwd_option {
+            panic!("Could not parse current working directory to string.")
+        }
+        let cwd = cwd_option.unwrap();
+        let path = format!("{cwd}/{path}");
+        return path;
+    }
+
     pub fn read_file(path: &String) -> ParsedFile {
-        let file = File::open(path);
+        // let path = get_full_path(path);
+        let file = File::open("D:\\retort-js\\test\\MyComponent\\MyComponent.js");
         if let Result::Err(err) = file {
+            let er = err.to_string();
+            log_1(&JsValue::from_str(&er));
             panic!("There was an error reading the file specified at {path} : {err}")
         }
         let file = file.unwrap();

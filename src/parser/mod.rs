@@ -1,13 +1,39 @@
 pub mod parser_mod {
-    use web_sys::Node;
 
     // use crate::component::component_mod::Component;
     use crate::component::component_mod::Component;
     use crate::file_util::file_util_mod::ParsedFile;
     use crate::tokenizer::tokenizer_mod::{tokenizer, CurrentState, TokenizerState};
+    use serde::{Deserialize, Serialize};
+    use serde_wasm_bindgen::from_value;
     use std::collections::HashMap;
-    use std::fmt::{format, Display};
+    use std::future::IntoFuture;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::console::{log_0, log_1};
+    use web_sys::js_sys::Promise;
 
+    use std::fmt::Display;
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen(module = "/module_resolver/module_resolver.js")]
+    extern "C" {
+        fn module_resolver(path: &str) -> Promise;
+    }
+
+    #[wasm_bindgen]
+    pub async fn call_module_resolver(path: &str) -> Result<Component, serde_wasm_bindgen::Error> {
+        // Call the JavaScript function
+        log_1(&JsValue::from_str("here1"));
+        let promise = module_resolver(path);
+        log_1(&JsValue::from_str("here2"));
+        let future = JsFuture::from(promise);
+        log_1(&JsValue::from_str("here3"));
+        let result = future.await.unwrap();
+        log_1(&JsValue::from_str("here4"));
+        let result: Result<Component, serde_wasm_bindgen::Error> = from_value(result);
+        log_1(&JsValue::from_str("here5"));
+        return result;
+    }
     pub enum NodeType {
         Component(Component), //component object
         Tag(String),          // tag name
@@ -32,7 +58,6 @@ pub mod parser_mod {
 
     // TODOS:
     // 1- empty strings are being tokenized as Texts, not cool.
-    
 
     pub fn parse_vdom_from_string(parsed_file: ParsedFile) -> Vec<VirtualNode> {
         let ParsedFile { imports, markup } = parsed_file;
@@ -80,9 +105,6 @@ pub mod parser_mod {
                         vdom.push(new_node);
                         break;
                     }
-
-                    // stack.push(new_node);
-                    // stack_size += 1;
                 }
                 TokenizerState::TagNameOpen => {
                     let tag = NodeType::Tag(token);
@@ -94,6 +116,20 @@ pub mod parser_mod {
                     stack.push(new_node);
                     stack_size += 1;
                 }
+                TokenizerState::Component => {
+                    let component_path = imports.get(&token);
+                    if let Option::None = component_path {
+                        panic!(
+                            "{}",
+                            format!(
+                            "An import statement for {token} was supposed to exist, but it didn't."
+                        )
+                        )
+                    }
+                    let component_path = component_path.unwrap();
+                    log_1(&JsValue::from_str("here??"));
+                    let component = call_module_resolver(&component_path);
+                } // note that all Components are assumed to be self-closing at this point. The other variant is not handled
                 TokenizerState::Props => {
                     let owner_node = stack.get_mut(stack_size - 1).unwrap();
                     let attrs = &mut owner_node.attributes;
@@ -116,7 +152,6 @@ pub mod parser_mod {
                     }
                 }
                 TokenizerState::CloseAngleBracket => {}
-                TokenizerState::Component => {}
                 _ => {}
             }
         }

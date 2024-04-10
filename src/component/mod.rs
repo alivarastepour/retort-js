@@ -4,7 +4,7 @@ pub mod component_mod {
     use crate::{error::error_mod::Error as CustomError, parser::parser_mod::VirtualNode};
     use serde::{Deserialize, Serialize};
     use serde_json::{from_str, to_string, Error, Map, Value};
-    use serde_wasm_bindgen::to_value;
+    use serde_wasm_bindgen::{from_value, to_value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{console::log_1, js_sys::Function};
 

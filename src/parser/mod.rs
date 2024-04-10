@@ -5,15 +5,11 @@ pub mod parser_mod {
     use crate::presenter::presenter_mod::ParsedPresenter;
     use crate::tokenizer::tokenizer_mod::{tokenizer, CurrentState, TokenizerState};
     use serde::{Deserialize, Serialize};
-    use serde_wasm_bindgen::{from_value, to_value, Error};
+    use serde_wasm_bindgen::from_value;
     use std::collections::HashMap;
-    use wasm_bindgen::convert::{FromWasmAbi, IntoWasmAbi};
+    use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
-    use web_sys::console::log_1;
     use web_sys::js_sys::Promise;
-
-    use std::fmt::Display;
-    use wasm_bindgen::{describe::WasmDescribe, prelude::*};
 
     #[derive(Serialize, Deserialize)]
     pub enum NodeType {
@@ -32,11 +28,32 @@ pub mod parser_mod {
         }
     }
 
+    #[derive(Serialize, Deserialize)]
+    pub struct VirtualNode {
+        pub node_type: NodeType,
+        pub attributes: HashMap<String, String>,
+        pub children: Vec<VirtualNode>,
+    }
+
+    impl Clone for VirtualNode {
+        fn clone(&self) -> Self {
+            Self {
+                attributes: self.attributes.clone(),
+                children: self.children.clone(),
+                node_type: self.node_type.clone(),
+            }
+        }
+    }
+
+    // This path should be kept in sync with where the specified file actually resides.
     #[wasm_bindgen(module = "/module_resolver/module_resolver.js")]
     extern "C" {
         fn module_resolver(path: &str) -> Promise;
     }
 
+    /// A wrapper function that calls the `module_resolver` function which is defined in Javascript.
+    /// The resolved value of a call to `module_resolver` is supposedly a `Component` object;
+    /// if it was, an `Ok` variant is returned which contains the `Component` object, `Err` otherwise.
     pub async fn call_module_resolver(path: &str) -> Result<Component, CustomError> {
         let path = path.replace("\"", "").replace(";", "");
         let promise = module_resolver(&path);
@@ -60,33 +77,9 @@ pub mod parser_mod {
         Ok(component)
     }
 
-    impl Display for NodeType {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Self::Component(component) => f.write_str("component"),
-                Self::Tag(tag) => f.write_str(&format!("tag: {tag}")),
-                Self::Text(text) => f.write_str(&format!("text: {text}")),
-            }
-        }
-    }
-
-    #[derive(Serialize, Deserialize)]
-    pub struct VirtualNode {
-        pub node_type: NodeType,
-        pub attributes: HashMap<String, String>,
-        pub children: Vec<VirtualNode>,
-    }
-
-    impl Clone for VirtualNode {
-        fn clone(&self) -> Self {
-            Self {
-                attributes: self.attributes.clone(),
-                children: self.children.clone(),
-                node_type: self.node_type.clone(),
-            }
-        }
-    }
-
+    /// The final stack which contains the info of VDOM, should only have one item in the end; which
+    /// in this case, an `Ok` variant containing a VirtualNode is returned. Other than that an `Err`
+    /// variant is returned explaining the reason.
     fn get_parser_return_value(stack: Vec<VirtualNode>) -> Result<VirtualNode, CustomError> {
         if stack.len() == 1 {
             let top = stack.get(0).unwrap();
@@ -97,6 +90,9 @@ pub mod parser_mod {
         return Err(CustomError::ParsingError(msg));
     }
 
+    /// Given an object of type `ParsedPresenter`, constructs a vdom using the `tokenizer` module.
+    /// If an error is encountered, an `Err` variant is returned explaining why; `Ok` otherwise,
+    /// which contains a `VirtualNode` object.
     pub async fn parse_vdom_from_string(
         parsed_file: ParsedPresenter,
     ) -> Result<VirtualNode, CustomError> {

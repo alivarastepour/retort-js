@@ -4,14 +4,16 @@ pub mod parser_mod {
     use crate::error::error_mod::Error;
     use crate::presenter::presenter_mod::ParsedPresenter;
     use crate::tokenizer::tokenizer_mod::{tokenizer, CurrentState, TokenizerState};
+    use serde::{Deserialize, Serialize};
     use serde_wasm_bindgen::from_value;
     use std::collections::HashMap;
     use wasm_bindgen_futures::JsFuture;
-    use web_sys::js_sys::{Function, Promise};
+    use web_sys::js_sys::Promise;
 
     use std::fmt::Display;
     use wasm_bindgen::prelude::*;
 
+    #[derive(Serialize, Deserialize)]
     pub enum NodeType {
         Component(Component), //component object
         Tag(String),          // tag name
@@ -56,6 +58,7 @@ pub mod parser_mod {
         }
     }
 
+    #[derive(Serialize, Deserialize)]
     pub struct VirtualNode {
         pub node_type: NodeType,
         pub attributes: HashMap<String, String>,
@@ -182,6 +185,6 @@ pub mod parser_mod {
                 _ => {}
             }
         }
-        return Err(Error::ParsingError("()".to_owned()));
+        return get_parser_return_value(stack);
     }
 }

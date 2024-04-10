@@ -1,6 +1,7 @@
 mod component;
+mod error;
 mod file_util;
 mod parser;
 mod presenter;
-mod tokenizer; //TODO: presenter module is no longer needed
+mod tokenizer;
 pub mod lib_mod {}

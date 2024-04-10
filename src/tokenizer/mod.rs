@@ -281,7 +281,7 @@ pub mod tokenizer_mod {
         if has_closing_angle_bracket {
             CurrentState {
                 state: TokenizerState::SelfClosingAngleBracket,
-                token: "/>".to_owned(),
+                token: SELF_CLOSING_TAG.to_owned(),
             }
         } else {
             CurrentState {

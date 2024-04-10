@@ -194,7 +194,6 @@ pub mod parser_mod {
                         break;
                     }
                 }
-                TokenizerState::CloseAngleBracket => {}
                 _ => {}
             }
         }

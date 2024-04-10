@@ -16,17 +16,11 @@ pub mod component_mod {
     #[wasm_bindgen]
     pub struct Component {
         state: Value,
-        // presenter: Box<Presenter>,
         presenter: String,
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
         vdom: Box<VirtualNode>,
-    }
-
-    struct ParsedPresenter {
-        pub markup: String,
-        pub imports: HashMap<String, String>,
     }
 
     const NO_VALUE: &str = "undefined";

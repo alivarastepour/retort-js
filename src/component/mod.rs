@@ -1,45 +1,16 @@
 pub mod component_mod {
-    use std::{collections::HashMap, fmt::Debug, ops::Deref};
+    use std::{collections::HashMap, ops::Deref};
 
-    use crate::{
-        error::error_mod::Error as CustomError,
-        parser::parser_mod::{NodeType, VirtualNode},
-    };
+    use crate::{error::error_mod::Error as CustomError, parser::parser_mod::VirtualNode};
     use serde::{Deserialize, Serialize};
     use serde_json::{from_str, to_string, Error, Map, Value};
-    use serde_wasm_bindgen::{from_value, to_value};
-    use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
+    use serde_wasm_bindgen::to_value;
+    use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{console::log_1, js_sys::Function};
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
     };
-
-    // impl Serialize for VirtualNode {
-    //     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    //         where
-    //             S: serde::Serializer {
-
-    //     }
-    // }
-
-    // impl AsRef<JsValue> for Box<VirtualNode> {
-    //     fn as_ref(&self) -> &JsValue {
-    //         let vnode = **self;
-    //         let a = to_value(&vnode);
-    //     }
-    // }
-
-    // impl From<Box<VirtualNode>> for JsValue {
-    //     fn from(value: Box<VirtualNode>) -> Self {}
-    // }
-
-    // impl JsCast for Box<VirtualNode> {
-    //     fn instanceof(val: &JsValue) -> bool {}
-    //     fn unchecked_from_js(val: JsValue) -> Self {}
-
-    //     fn unchecked_from_js_ref(val: &JsValue) -> &Self {}
-    // }
 
     #[derive(Serialize, Deserialize)]
     #[wasm_bindgen]
@@ -50,11 +21,7 @@ pub mod component_mod {
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
-        #[serde(with = "serde_wasm_bindgen::preserve")]
-        vdom: JsValue,
-        a: Box<VirtualNode>, // Our approach towards keeping vdom with the Component struct as a field
-                             // of type `Box<VirtualNode>, Arc<VirtualNode> and &VirtualNode was not successful due to
-                             // the complexity that implementing the required traits brought`. For now, we stick with
+        vdom: Box<VirtualNode>,
     }
 
     struct ParsedPresenter {
@@ -67,14 +34,12 @@ pub mod component_mod {
 
     impl Clone for Component {
         fn clone(&self) -> Self {
-            let a = self.a.deref().to_owned();
             Component {
                 presenter: self.presenter.clone(),
                 props: self.props.to_owned(),
                 state: self.state.to_owned(),
                 component_did_mount: self.component_did_mount.to_owned(),
-                vdom: JsValue::null(),
-                a: Box::from(a),
+                vdom: Box::from(self.vdom.deref().to_owned()),
             }
         }
     }
@@ -87,40 +52,32 @@ pub mod component_mod {
             presenter: String,
             component_did_mount: &Function,
         ) -> Component {
-            log_1(&JsValue::from_str("hiiiiii1"));
             let state: Result<Value, Error> = from_str(&state);
             if let Result::Err(err) = state {
                 panic!("could not convert it: {err}");
             }
-            log_1(&JsValue::from_str("hiiiiii2"));
-            let a = Self::create_component_vdom(presenter.clone()).await;
-            if let Result::Err(err) = a {
-                // let a = err.fmt(f);
-                match err {
-                    CustomError::SerdeWasmBindgenError(b) => {}
-                    CustomError::ParsingError(p) => log_1(&JsValue::from_str(p.as_str())),
-                    CustomError::ReferenceError(p) => log_1(&JsValue::from_str(p.as_str())),
-                    CustomError::ResolveError(p) => log_1(&JsValue::from_str(p.as_str())),
-                    CustomError::TypeError(p) => log_1(&JsValue::from_str(p.as_str())),
-                }
-                panic!("")
+            let virtual_node_result: Result<VirtualNode, CustomError> =
+                Self::create_component_vdom(presenter.clone()).await;
+            if let Result::Err(err) = virtual_node_result {
+                panic!("");
             }
-            log_1(&JsValue::from_str("hiiiiii3"));
-
-            let a = a.unwrap();
             Component {
                 state: state.unwrap(),
                 presenter,
                 props: "{}".to_owned(),
                 component_did_mount: component_did_mount.clone(),
-                vdom: JsValue::null(),
-                a: Box::new(a),
+                vdom: Box::new(virtual_node_result.unwrap()),
             }
         }
 
         #[wasm_bindgen(getter)]
         pub fn component_did_mount(&self) -> Function {
             self.component_did_mount.clone()
+        }
+
+        #[wasm_bindgen(getter)]
+        pub fn vdom(&self) -> JsValue {
+            to_value(&self.vdom).unwrap()
         }
 
         #[wasm_bindgen(setter)]
@@ -130,7 +87,6 @@ pub mod component_mod {
 
         #[wasm_bindgen(getter)]
         pub fn state(&self) -> String {
-            // log_1(&JsValue::from_str("invoked getter"));
             to_string(&self.state).unwrap()
         }
 
@@ -262,17 +218,19 @@ pub mod component_mod {
         }
 
         async fn create_component_vdom(presenter: String) -> Result<VirtualNode, CustomError> {
-            // let presenter = &component.presenter;
             let res = parse_presenter(&presenter);
             if let Result::Err(err) = res {
                 return Err(err);
             }
             let res = res.unwrap();
-            let x = parse_vdom_from_string(res).await;
-            if let Result::Err(err) = x {
+            let virtual_node_result = parse_vdom_from_string(res).await;
+            if let Result::Err(err) = virtual_node_result {
                 return Err(err);
             }
-            Ok(x.unwrap())
+            let virtual_node = virtual_node_result.unwrap();
+            Ok(virtual_node)
+
+            // NOTE: comments are some what deprecated but not removed because they still provide road map
 
             // read content of above line's file
             // parse the markup, look for component imports
@@ -281,6 +239,8 @@ pub mod component_mod {
             // after the execution of this function finalizes, vdom structure of all components should be prepared
             // and we are ready to create its unified version.
         }
+
+        /// NOTE: comments are some what deprecated but not removed because they still provide road map
 
         // 1- mount should be called on a root node
         // 2- add a root field to component struct to determine if it has permission to call mount(optional)
@@ -298,14 +258,6 @@ pub mod component_mod {
         // 14- from here we can start creating the actual DOM.
         // 15- I suspect if need to keep this initially created unified VDOM, since we will only work with component updates from here on, and we have VDOM of each component
         async fn create_vdom(component: &mut Component) -> Result<VirtualNode, CustomError> {
-            let vdom = component.a.deref();
-            let a = to_value(vdom);
-            if let Result::Err(err) = &a {
-                let msg = err.to_string();
-                log_1(&JsValue::from_str(&msg));
-            }
-            log_1(&a.unwrap());
-
             let presenter = &component.presenter;
             let res = parse_presenter(presenter);
             if let Result::Err(err) = res {
@@ -313,11 +265,12 @@ pub mod component_mod {
             }
             let res = res.unwrap();
             let x = parse_vdom_from_string(res).await;
+
             if let Result::Err(err) = x {
                 return Err(err);
             }
-
-            Ok(x.unwrap())
+            let virtual_node = x.unwrap();
+            Ok(virtual_node)
 
             // read content of above line's file
             // parse the markup, look for component imports

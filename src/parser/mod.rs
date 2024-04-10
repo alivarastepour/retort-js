@@ -159,7 +159,8 @@ pub mod parser_mod {
                         attributes: HashMap::new(),
                         children: Vec::new(),
                         node_type: NodeType::Component(component),
-                    })
+                    });
+                    stack_size += 1;
                 } // note that all Components are assumed to be self-closing at this point. The other variant is not handled
                 TokenizerState::Props => {
                     let owner_node = stack.get_mut(stack_size - 1).unwrap();
@@ -185,6 +186,6 @@ pub mod parser_mod {
                 _ => {}
             }
         }
-        return get_parser_return_value(stack);
+        return get_parser_return_value(vdom);
     }
 }

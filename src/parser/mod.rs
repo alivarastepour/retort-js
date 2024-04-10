@@ -1,17 +1,19 @@
 pub mod parser_mod {
 
     use crate::component::component_mod::Component;
-    use crate::error::error_mod::Error;
+    use crate::error::error_mod::Error as CustomError;
     use crate::presenter::presenter_mod::ParsedPresenter;
     use crate::tokenizer::tokenizer_mod::{tokenizer, CurrentState, TokenizerState};
     use serde::{Deserialize, Serialize};
-    use serde_wasm_bindgen::from_value;
+    use serde_wasm_bindgen::{from_value, to_value, Error};
     use std::collections::HashMap;
+    use wasm_bindgen::convert::{FromWasmAbi, IntoWasmAbi};
     use wasm_bindgen_futures::JsFuture;
+    use web_sys::console::log_1;
     use web_sys::js_sys::Promise;
 
     use std::fmt::Display;
-    use wasm_bindgen::prelude::*;
+    use wasm_bindgen::{describe::WasmDescribe, prelude::*};
 
     #[derive(Serialize, Deserialize)]
     pub enum NodeType {
@@ -20,12 +22,22 @@ pub mod parser_mod {
         Text(String),         // text content
     }
 
+    impl Clone for NodeType {
+        fn clone(&self) -> Self {
+            match self {
+                Self::Component(component) => Self::Component(component.clone()),
+                Self::Tag(tag) => Self::Tag(tag.clone()),
+                Self::Text(text) => Self::Text(text.clone()),
+            }
+        }
+    }
+
     #[wasm_bindgen(module = "/module_resolver/module_resolver.js")]
     extern "C" {
         fn module_resolver(path: &str) -> Promise;
     }
 
-    pub async fn call_module_resolver(path: &str) -> Result<Component, Error> {
+    pub async fn call_module_resolver(path: &str) -> Result<Component, CustomError> {
         let path = path.replace("\"", "").replace(";", "");
         let promise = module_resolver(&path);
         let future = JsFuture::from(promise);
@@ -34,15 +46,15 @@ pub mod parser_mod {
             let msg = err.as_string();
             if let Option::None = msg {
                 let msg = "Expected an error message to be string, but wasn't.".to_owned();
-                return Err(Error::TypeError(msg));
+                return Err(CustomError::TypeError(msg));
             }
             let msg = msg.unwrap();
-            return Err(Error::ResolveError(msg));
+            return Err(CustomError::ResolveError(msg));
         }
         let result = result.unwrap();
         let component_result: Result<Component, serde_wasm_bindgen::Error> = from_value(result);
         if let Result::Err(err) = component_result {
-            return Err(Error::SerdeWasmBindgenError(err));
+            return Err(CustomError::SerdeWasmBindgenError(err));
         }
         let component = component_result.unwrap();
         Ok(component)
@@ -70,24 +82,24 @@ pub mod parser_mod {
             Self {
                 attributes: self.attributes.clone(),
                 children: self.children.clone(),
-                node_type: NodeType::Tag("".to_owned()),
+                node_type: self.node_type.clone(),
             }
         }
     }
 
-    fn get_parser_return_value(stack: Vec<VirtualNode>) -> Result<VirtualNode, Error> {
+    fn get_parser_return_value(stack: Vec<VirtualNode>) -> Result<VirtualNode, CustomError> {
         if stack.len() == 1 {
             let top = stack.get(0).unwrap();
             return Ok(top.clone());
         }
         let msg = "Presenter of each component must be wrapped inside one and only one wrapper."
             .to_owned();
-        return Err(Error::ParsingError(msg));
+        return Err(CustomError::ParsingError(msg));
     }
 
     pub async fn parse_vdom_from_string(
         parsed_file: ParsedPresenter,
-    ) -> Result<VirtualNode, Error> {
+    ) -> Result<VirtualNode, CustomError> {
         let ParsedPresenter { imports, markup } = parsed_file;
         let mut get_next_token = tokenizer(markup);
         let mut stack: Vec<VirtualNode> = Vec::new();
@@ -101,7 +113,7 @@ pub mod parser_mod {
                 }
                 TokenizerState::Error(err) => {
                     let err = format!("[ERROR] {err}");
-                    return Err(Error::ParsingError(err));
+                    return Err(CustomError::ParsingError(err));
                 }
                 TokenizerState::TagNameClose => {
                     let completed_node = stack.pop().unwrap();
@@ -147,7 +159,7 @@ pub mod parser_mod {
                         let msg =
                             "An import statement for {token} was supposed to exist, but it didn't."
                                 .to_owned();
-                        return Err(Error::ReferenceError(msg));
+                        return Err(CustomError::ReferenceError(msg));
                     }
                     let component_path = component_path.unwrap();
                     let component = call_module_resolver(&component_path).await;

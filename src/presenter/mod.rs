@@ -37,7 +37,7 @@ pub mod presenter_mod {
     }
 
     pub fn parse_presenter(presenter: &String) -> Result<ParsedPresenter, Error> {
-        let split_presenter: Vec<&str> = presenter.split('\n').collect();
+        let split_presenter: Vec<&str> = presenter.trim().split('\n').collect();
         let mut in_markup = false;
         let mut imports: HashMap<String, String> = HashMap::new();
         let mut markup: Vec<String> = Vec::new();

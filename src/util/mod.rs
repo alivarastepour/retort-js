@@ -1,4 +1,6 @@
 pub mod util_mod {
+
+    // TODO: remove the below functions. they are already implemented lol.
     pub fn option_has_value<T>(op: &Option<T>) -> bool {
         if let Option::None = op {
             return false;

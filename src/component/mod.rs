@@ -1,12 +1,15 @@
 pub mod component_mod {
     use std::{collections::HashMap, ops::Deref};
 
-    use crate::{error::error_mod::Error as CustomError, parser::parser_mod::VirtualNode};
+    use crate::{
+        error::error_mod::Error as CustomError,
+        parser::parser_mod::{NodeType, VirtualNode},
+    };
     use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, to_string, Error, Map, Value};
+    use serde_json::{from_str, map::Keys, to_string, Error, Map, Value};
     use serde_wasm_bindgen::{from_value, to_value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::{console::log_1, js_sys::Function};
+    use web_sys::{console::log_1, js_sys::Function, window, Document, Element, Node, Text};
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -272,10 +275,95 @@ pub mod component_mod {
             // after that, add components to the vdom of current component as is, then call this function on the newly created components.
             // after the execution of this function finalizes, vdom structure of all components should be prepared
             // and we are ready to create its unified version.
+
+            // this function is called with the root node.
+            // in the root node's object, we have access to all components' vdom structure.
+            // the vdom structure currently contains tag nodes, text nodes and component nodes.
+            // we can't render a component node; that is meaningless. so in order to create a representation
+            // that is convertible to DOM, we need to do the following:
+            // 1- access the vdom of root node.
+            // 2- traverse through its vdom field.
+            // 3- Text and Tag variants of `node_type` should be left as is(do what with them?).
+            // 4- Component variants though, must be replaced with what they "return".
+            // 5-
         }
 
-        pub async fn mount(&mut self) {
-            Self::create_vdom(self).await;
+        fn construct_dom(current_root: &VirtualNode, parent: &Element, document: &Document) {
+            let node_type = &current_root.node_type;
+            match node_type {
+                NodeType::Component(component) => {}
+                NodeType::Tag(tag_name) => {
+                    let new_element_result = document.create_element(&tag_name);
+                    if let Result::Err(err) = new_element_result {
+                        panic!("")
+                    }
+                    let new_element = new_element_result.unwrap();
+                    let attributes = &current_root.attributes;
+                    for (key, value) in attributes {
+                        // TEMP SOLUTION
+                        let value = value.replace("{", "").replace("}", "");
+                        let value = &value[1..value.len() - 1];
+                        let res = new_element.set_attribute(key, &value);
+                    }
+                    let res = parent.append_child(&new_element);
+                    let children = &current_root.children;
+                    for child in children {
+                        Self::construct_dom(child, &new_element, &document);
+                    }
+                    // Document::create_element(&tag_name);
+                }
+                NodeType::Text(text) => {
+                    let text_element = Text::new_with_data(text);
+                    if let Result::Err(err) = text_element {
+                        panic!("")
+                    }
+                    let t = text_element.unwrap();
+                    parent.append_child(&t);
+                }
+            }
+        }
+
+        fn is_option_desirable<T>(op: &Option<T>) -> bool {
+            if let Option::None = op {
+                return false;
+            };
+            return true;
+        }
+
+        fn is_result_desirable<T, E>(rs: &Result<T, E>) -> bool {
+            if let Result::Err(_) = rs {
+                return false;
+            };
+            return true;
+        }
+
+        pub fn mount(&mut self) {
+            // let vdom_result = Self::create_vdom(self).await;
+            // if let Result::Err(err) = &vdom_result {
+            //     panic!("")
+            // }
+            // let vdom = vdom_result.unwrap();
+
+            let window_option = window();
+            let is_window_option_desirable = Self::is_option_desirable(&window_option);
+            if !is_window_option_desirable {
+                panic!("")
+            }
+            let window = window_option.unwrap();
+            let document_option = window.document();
+            if let Option::None = document_option {
+                panic!("")
+            }
+            let document = document_option.unwrap();
+            let wrapper_option = document.get_element_by_id("root");
+            if let Option::None = wrapper_option {
+                panic!("")
+            }
+            let wrapper = wrapper_option.unwrap();
+
+            Self::construct_dom(&self.vdom, &wrapper, &document);
+
+            // let root_vdom = self.vdom.deref();
         }
     }
 }

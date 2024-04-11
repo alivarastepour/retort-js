@@ -149,7 +149,7 @@ pub mod tokenizer_mod {
     /// Determines the type of token after tag's name is built.
     fn get_state_after_tag_name(tag_name: String, caller: bool) -> CurrentState {
         let collected_tag_name: Vec<char> = tag_name.chars().collect();
-        let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphabetic());
+        let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphanumeric());
         if !is_valid_string {
             return CurrentState {
                 token: "".to_owned(),

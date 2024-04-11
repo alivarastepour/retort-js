@@ -52,7 +52,7 @@ pub mod tokenizer_mod {
     /// a ClosingTag, an OpenAngleBracket or a Text variant.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which is returned in the `token` field.
-    fn get_state_after_open_angle_bracket(
+    pub fn get_state_after_open_angle_bracket(
         text: String,
         index: &mut usize,
         markup: &Vec<char>,
@@ -116,7 +116,7 @@ pub mod tokenizer_mod {
 
     /// Advances `index` till it reaches the first char that doesn't match with `\s`(any whitespace char).
     /// It will update the `index` mutable reference.
-    fn update_starting_tag_index(index: &mut usize, max: usize, markup: &Vec<char>) {
+    pub fn update_starting_tag_index(index: &mut usize, max: usize, markup: &Vec<char>) {
         loop {
             if *index == max {
                 break;
@@ -132,7 +132,7 @@ pub mod tokenizer_mod {
 
     /// Advances `index` to the end of tag name. It will update mutable references of both `index` and
     /// `tag_name`
-    fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
+    pub fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
         loop {
             let mut current = markup[*index].to_string();
             current = current.trim().to_owned();
@@ -147,7 +147,7 @@ pub mod tokenizer_mod {
     }
 
     /// Determines the type of token after tag's name is built.
-    fn get_state_after_tag_name(tag_name: String, caller: bool) -> CurrentState {
+    pub fn get_state_after_tag_name(tag_name: String, caller: bool) -> CurrentState {
         let collected_tag_name: Vec<char> = tag_name.chars().collect();
         let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphabetic());
         if !is_valid_string {
@@ -185,7 +185,7 @@ pub mod tokenizer_mod {
     /// 2- Encountered a '<' char which is a tag's closing: like '</div>' at index 0.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which is returned in the `token` field.
-    fn proceed_from_open_angle_bracket(
+    pub fn proceed_from_open_angle_bracket(
         markup: &Vec<char>,
         index: &mut usize,
         caller: bool,
@@ -211,7 +211,7 @@ pub mod tokenizer_mod {
     /// or attributes like `alt={"This is an image"}`.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which in this context, is supposed to be PROP_KEY_VALUE_SEPARATOR.
-    fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
+    pub fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         let max = markup.len();
         let mut key = String::from("");
         loop {
@@ -235,7 +235,7 @@ pub mod tokenizer_mod {
     /// or attributes like `alt={"This is an image"}`.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which in this context, is supposed to be CLOSE_CURLY_BRACKET.
-    fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
+    pub fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
 
@@ -272,7 +272,11 @@ pub mod tokenizer_mod {
     // todo: add max to functions' parameter list
 
     /// Determines if the encountered `/` char is valid or not
-    fn get_state_after_slash(index: &mut usize, markup: &Vec<char>, max: usize) -> CurrentState {
+    pub fn get_state_after_slash(
+        index: &mut usize,
+        markup: &Vec<char>,
+        max: usize,
+    ) -> CurrentState {
         *index += 1; // we want to check if the char after `/` is `>` or not, so we must advance
                      // the index by one; otherwise, call to `update_starting_tag_index` won't advance the index
                      // because it currently stands at a non-whitespace char(/).
@@ -295,7 +299,7 @@ pub mod tokenizer_mod {
 
     /// Returns a pair of props if its format is correct, error otherwise.
     /// Currently, the acceptable prop format is `key={"value"}`, `key={'value'}` and `key={js expression}`
-    fn get_state_from_props(index: &mut usize, markup: &Vec<char>) -> CurrentState {
+    pub fn get_state_from_props(index: &mut usize, markup: &Vec<char>) -> CurrentState {
         let key = read_key_of_prop(index, markup);
         *index += 1; // This is for PROP_KEY_VALUE_SEPARATOR
         let value = read_value_of_prop(index, markup);
@@ -322,7 +326,7 @@ pub mod tokenizer_mod {
     /// of tokens to appear; which are CloseAngleBracket, SelfClosingAngleBracket and a pair of Props
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which is returned in the `token` field.
-    fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
+    pub fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> CurrentState {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
         if markup[*index] == '>' {

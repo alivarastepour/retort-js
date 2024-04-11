@@ -1,4 +1,6 @@
 pub mod dom_mod {
+    use std::collections::HashMap;
+
     use web_sys::{window, Document, Element, Text, Window};
 
     use crate::{
@@ -57,38 +59,92 @@ pub mod dom_mod {
         Ok(app_wrapper)
     }
 
-    fn construct_dom(current_root: &VirtualNode, parent: &Element, document: &Document) {
+    fn add_attributes(
+        attributes: &HashMap<String, String>,
+        element: &Element,
+    ) -> Result<(), Error> {
+        for (key, value) in attributes {
+            let set_attribute_result = element.set_attribute(key, value);
+            if set_attribute_result.is_err() {
+                return Err(Error::DomError(set_attribute_result.unwrap_err()));
+            }
+        }
+        Ok(())
+    }
+
+    fn add_children(
+        children: &Vec<VirtualNode>,
+        element: &Element,
+        document: &Document,
+    ) -> Result<(), Error> {
+        for child in children {
+            let construct_result = self::construct_dom(child, &element, &document);
+            if construct_result.is_err() {
+                return Err(construct_result.unwrap_err());
+            }
+        }
+        Ok(())
+    }
+
+    fn construct_tag(
+        current_root: &VirtualNode,
+        parent: &Element,
+        document: &Document,
+        tag_name: String,
+    ) -> Result<(), Error> {
+        let new_element_result = document.create_element(&tag_name);
+        let new_element_result_is_ok = result_is_ok(&new_element_result);
+        if !new_element_result_is_ok {
+            return Err(Error::DomError(new_element_result.unwrap_err()));
+        }
+        let new_element = new_element_result.unwrap();
+
+        let attributes = &current_root.attributes;
+        let add_attributes_result = add_attributes(attributes, &new_element);
+        if add_attributes_result.is_err() {
+            return Err(add_attributes_result.unwrap_err());
+        }
+
+        let append_child_result = parent.append_child(&new_element);
+        let append_child_result_is_ok = append_child_result.is_ok();
+        if !append_child_result_is_ok {
+            return Err(Error::DomError(append_child_result.unwrap_err()));
+        }
+
+        let children = &current_root.children;
+        return add_children(children, &new_element, document);
+    }
+
+    fn construct_text(text: &String, parent: &Element) -> Result<(), Error> {
+        let text_element_result = Text::new_with_data(text);
+        let text_element_result_is_ok = text_element_result.is_ok();
+        if !text_element_result_is_ok {
+            return Err(Error::DomError(text_element_result.unwrap_err()));
+        }
+        let text_element = text_element_result.unwrap();
+        let append_text_result = parent.append_child(&text_element);
+        let append_text_result_is_ok = append_text_result.is_ok();
+        if !append_text_result_is_ok {
+            return Err(Error::DomError(append_text_result.unwrap_err()));
+        }
+        Ok(())
+    }
+
+    fn construct_dom(
+        current_root: &VirtualNode,
+        parent: &Element,
+        document: &Document,
+    ) -> Result<(), Error> {
         let node_type = &current_root.node_type;
         match node_type {
             NodeType::Component(component) => {
-                self::construct_dom(&component.vdom, parent, document);
+                return construct_dom(&component.vdom, parent, document);
             }
             NodeType::Tag(tag_name) => {
-                let new_element_result = document.create_element(&tag_name);
-                if let Result::Err(err) = new_element_result {
-                    panic!("")
-                }
-                let new_element = new_element_result.unwrap();
-                let attributes = &current_root.attributes;
-                for (key, value) in attributes {
-                    // TEMP SOLUTION
-                    let value = value.replace("{", "").replace("}", "");
-                    let value = &value[1..value.len() - 1];
-                    let res = new_element.set_attribute(key, &value);
-                }
-                let res = parent.append_child(&new_element);
-                let children = &current_root.children;
-                for child in children {
-                    self::construct_dom(child, &new_element, &document);
-                }
+                return construct_tag(current_root, parent, document, tag_name.to_owned());
             }
             NodeType::Text(text) => {
-                let text_element = Text::new_with_data(text);
-                if let Result::Err(err) = text_element {
-                    panic!("")
-                }
-                let t = text_element.unwrap();
-                parent.append_child(&t);
+                return construct_text(text, parent);
             }
         }
     }
@@ -109,8 +165,7 @@ pub mod dom_mod {
         let document = document_result.unwrap();
         let parent = parent_result.unwrap();
 
-        construct_dom(current_root, &parent, &document);
-
+        let construct_dom_result = construct_dom(current_root, &parent, &document);
         Ok(())
     }
 }

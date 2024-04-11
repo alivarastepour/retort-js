@@ -1,15 +1,15 @@
 pub mod component_mod {
-    use std::{collections::HashMap, ops::Deref};
+    use std::ops::Deref;
 
     use crate::{
-        error::error_mod::Error as CustomError,
-        parser::parser_mod::{NodeType, VirtualNode},
+        dom::dom_mod::construct_dom_wrapper, error::error_mod::Error as CustomError,
+        parser::parser_mod::VirtualNode,
     };
     use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, map::Keys, to_string, Error, Map, Value};
-    use serde_wasm_bindgen::{from_value, to_value};
+    use serde_json::{from_str, to_string, Error, Map, Value};
+    use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::{console::log_1, js_sys::Function, window, Document, Element, Node, Text};
+    use web_sys::js_sys::Function;
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -23,7 +23,8 @@ pub mod component_mod {
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
-        vdom: Box<VirtualNode>,
+        #[wasm_bindgen(skip)]
+        pub vdom: Box<VirtualNode>,
     }
 
     const NO_VALUE: &str = "undefined";
@@ -103,7 +104,6 @@ pub mod component_mod {
         */
         #[wasm_bindgen]
         pub fn set_state_wrapper(&mut self, state: String) {
-            log_1(&JsValue::from_str(&state));
             let deserialized_state: Result<Value, Error> = from_str(&state);
             if let Result::Err(err) = deserialized_state {
                 panic!("could not convert it: {err}");
@@ -288,82 +288,8 @@ pub mod component_mod {
             // 5-
         }
 
-        fn construct_dom(current_root: &VirtualNode, parent: &Element, document: &Document) {
-            let node_type = &current_root.node_type;
-            match node_type {
-                NodeType::Component(component) => {}
-                NodeType::Tag(tag_name) => {
-                    let new_element_result = document.create_element(&tag_name);
-                    if let Result::Err(err) = new_element_result {
-                        panic!("")
-                    }
-                    let new_element = new_element_result.unwrap();
-                    let attributes = &current_root.attributes;
-                    for (key, value) in attributes {
-                        // TEMP SOLUTION
-                        let value = value.replace("{", "").replace("}", "");
-                        let value = &value[1..value.len() - 1];
-                        let res = new_element.set_attribute(key, &value);
-                    }
-                    let res = parent.append_child(&new_element);
-                    let children = &current_root.children;
-                    for child in children {
-                        Self::construct_dom(child, &new_element, &document);
-                    }
-                    // Document::create_element(&tag_name);
-                }
-                NodeType::Text(text) => {
-                    let text_element = Text::new_with_data(text);
-                    if let Result::Err(err) = text_element {
-                        panic!("")
-                    }
-                    let t = text_element.unwrap();
-                    parent.append_child(&t);
-                }
-            }
-        }
-
-        fn is_option_desirable<T>(op: &Option<T>) -> bool {
-            if let Option::None = op {
-                return false;
-            };
-            return true;
-        }
-
-        fn is_result_desirable<T, E>(rs: &Result<T, E>) -> bool {
-            if let Result::Err(_) = rs {
-                return false;
-            };
-            return true;
-        }
-
         pub fn mount(&mut self) {
-            // let vdom_result = Self::create_vdom(self).await;
-            // if let Result::Err(err) = &vdom_result {
-            //     panic!("")
-            // }
-            // let vdom = vdom_result.unwrap();
-
-            let window_option = window();
-            let is_window_option_desirable = Self::is_option_desirable(&window_option);
-            if !is_window_option_desirable {
-                panic!("")
-            }
-            let window = window_option.unwrap();
-            let document_option = window.document();
-            if let Option::None = document_option {
-                panic!("")
-            }
-            let document = document_option.unwrap();
-            let wrapper_option = document.get_element_by_id("root");
-            if let Option::None = wrapper_option {
-                panic!("")
-            }
-            let wrapper = wrapper_option.unwrap();
-
-            Self::construct_dom(&self.vdom, &wrapper, &document);
-
-            // let root_vdom = self.vdom.deref();
+            let res = construct_dom_wrapper(&self.vdom);
         }
     }
 }

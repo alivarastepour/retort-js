@@ -1,6 +1,25 @@
 pub mod evaluator_mod {
-    use wasm_bindgen::prelude::wasm_bindgen;
+    use std::fmt::format;
+
+    use serde_wasm_bindgen::{from_value, to_value};
+    use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
     use web_sys::js_sys::Function;
+
+    use crate::{component::component_mod::Component, error::error_mod::Error};
+
+    #[derive(Debug)]
+    pub enum TextVariant {
+        Boolean,
+        String,
+        Number,
+        Expression,
+    }
+
+    #[derive(Debug)]
+    pub struct TextInfo {
+        pub variant: TextVariant,
+        pub value: String,
+    }
 
     #[wasm_bindgen(js_namespace=window)]
     extern "C" {
@@ -8,24 +27,81 @@ pub mod evaluator_mod {
     }
 
     fn get_state_props_evaluator(function_string: String) -> Function {
-        Function("state".to_owned(), "props".to_owned(), function_string)
-        // let b = SomeThing {
-        //     exercise: "Running".to_owned(),
-        // };
-        // let a = to_value(&b).unwrap();
-        // let res = function.call1(&JsValue::undefined(), &a);
-        // if res.is_err() {
-        //     log_1(&JsValue::from_str("err!"));
-        //     log_1(&res.unwrap_err());
-        // } else {
-        //     log_1(&JsValue::from_str("no err!!!"));
-        //     log_1(&res.unwrap());
-        // }
+        let function_string = "const state = JSON.parse(state_);const props = JSON.parse(props_);"
+            .to_owned()
+            + "return "
+            + &function_string;
+        Function("state_".to_owned(), "props_".to_owned(), function_string)
     }
 
-    fn evaluate_expression(expression: String) {
-        let evaluator = get_state_props_evaluator(expression);
-        // expression.replace_range(range, replace_with)
+    pub fn evaluate_expression(
+        expression: String,
+        current_component: &Component,
+    ) -> Result<String, Error> {
+        let evaluator = get_state_props_evaluator(expression.to_owned());
+        let expression_evaluation_result = evaluator.call2(
+            &JsValue::undefined(),
+            &JsValue::from_str(&current_component.state()),
+            &JsValue::from_str(&current_component.props()),
+        );
+        if expression_evaluation_result.is_err() {
+            let msg: String =
+                from_value(expression_evaluation_result.unwrap_err()).unwrap_or("ERR".to_owned());
+            return Err(Error::EvaluationError(format!(
+                "Failed to evaluate the following expression: {expression}: {msg}"
+            )));
+        }
+        let evaluated_expression = expression_evaluation_result.unwrap();
+        let evaluated_expression_string_result;
+        if evaluated_expression.is_string() {
+            evaluated_expression_string_result = from_value(evaluated_expression).unwrap();
+        } else if evaluated_expression.as_f64().is_some() {
+            let evaluated_expression_f64_result = evaluated_expression.as_f64().unwrap();
+            evaluated_expression_string_result = evaluated_expression_f64_result.to_string();
+        } else if evaluated_expression.as_bool().is_some() {
+            let evaluated_expression_bool_result = evaluated_expression.as_bool().unwrap();
+            evaluated_expression_string_result = evaluated_expression_bool_result.to_string();
+        } else {
+            return Err(Error::EvaluationError(
+                "The following text value didn't have any of the supported types: {text}"
+                    .to_owned(),
+            ));
+        }
+
+        Ok(evaluated_expression_string_result)
+    }
+
+    pub fn get_attribute_text_variant(text: String) -> Result<TextInfo, Error> {
+        let text_trimmed = text.trim();
+        if text_trimmed.starts_with("{") && text_trimmed.ends_with("}") {
+            let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
+            if inside_bracket.parse::<i64>().is_ok() {
+                return Ok(TextInfo {
+                    value: inside_bracket.to_owned(),
+                    variant: TextVariant::Number,
+                });
+            } else if inside_bracket.parse::<bool>().is_ok() {
+                return Ok(TextInfo {
+                    value: inside_bracket.to_owned(),
+                    variant: TextVariant::Boolean,
+                });
+            } else if (inside_bracket.starts_with("\"") && inside_bracket.ends_with("\""))
+                || (inside_bracket.starts_with("'") && inside_bracket.ends_with("'"))
+            {
+                return Ok(TextInfo {
+                    value: inside_bracket.to_owned(),
+                    variant: TextVariant::String,
+                });
+            } else {
+                return Ok(TextInfo {
+                    value: inside_bracket.to_owned(),
+                    variant: TextVariant::Expression,
+                });
+            }
+        }
+        return Err(Error::ParsingError(format!(
+            "The following text value didn't have any of the supported types: {text}"
+        )));
     }
 
     // tokenizer/parser

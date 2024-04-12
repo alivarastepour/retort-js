@@ -1,10 +1,19 @@
 pub mod dom_mod {
     use std::collections::HashMap;
 
-    use web_sys::{window, Document, Element, Text, Window};
+    use serde_wasm_bindgen::to_value;
+    use wasm_bindgen::JsValue;
+    use web_sys::{
+        console::{log_1, time, time_end},
+        window, Document, Element, Text, Window,
+    };
 
     use crate::{
+        component::component_mod::Component,
         error::error_mod::Error,
+        evaluator::evaluator_mod::{
+            evaluate_expression, get_attribute_text_variant, TextInfo, TextVariant,
+        },
         parser::parser_mod::{NodeType, VirtualNode},
         util::util_mod::{option_has_value, result_is_ok},
     };
@@ -60,11 +69,35 @@ pub mod dom_mod {
     }
 
     fn add_attributes(
+        current_component: &Component,
         attributes: &HashMap<String, String>,
         element: &Element,
     ) -> Result<(), Error> {
         for (key, value) in attributes {
-            let set_attribute_result = element.set_attribute(key, value);
+            let attribute_value_variant_result = get_attribute_text_variant(value.to_owned());
+            if attribute_value_variant_result.is_err() {
+                return Err(attribute_value_variant_result.unwrap_err());
+            }
+            let TextInfo { value, variant } = attribute_value_variant_result.unwrap();
+            let attr_value;
+            match variant {
+                TextVariant::Expression => {
+                    // time();
+                    let attr_value_result = evaluate_expression(value, current_component);
+                    if attr_value_result.is_err() {
+                        return Err(attr_value_result.unwrap_err());
+                    }
+                    attr_value = attr_value_result.unwrap();
+                    // time_end();
+                }
+                _ => {
+                    // time();
+                    attr_value = value;
+                    // time_end();
+                }
+            }
+
+            let set_attribute_result = element.set_attribute(key, &attr_value);
             if set_attribute_result.is_err() {
                 return Err(Error::DomError(set_attribute_result.unwrap_err()));
             }
@@ -74,11 +107,22 @@ pub mod dom_mod {
 
     fn add_children(
         children: &Vec<VirtualNode>,
+        current_component: &Component,
         element: &Element,
         document: &Document,
     ) -> Result<(), Error> {
         for child in children {
-            let construct_result = self::construct_dom(child, &element, &document);
+            let node_type = &child.node_type;
+            let construct_result;
+            match node_type {
+                NodeType::Component(component) => {
+                    construct_result = self::construct_dom(child, &component, &element, &document);
+                }
+                _ => {
+                    construct_result =
+                        self::construct_dom(child, current_component, &element, &document);
+                }
+            }
             if construct_result.is_err() {
                 return Err(construct_result.unwrap_err());
             }
@@ -88,6 +132,7 @@ pub mod dom_mod {
 
     fn construct_tag(
         current_root: &VirtualNode,
+        current_component: &Component,
         parent: &Element,
         document: &Document,
         tag_name: String,
@@ -100,7 +145,7 @@ pub mod dom_mod {
         let new_element = new_element_result.unwrap();
 
         let attributes = &current_root.attributes;
-        let add_attributes_result = add_attributes(attributes, &new_element);
+        let add_attributes_result = add_attributes(current_component, attributes, &new_element);
         if add_attributes_result.is_err() {
             return Err(add_attributes_result.unwrap_err());
         }
@@ -112,7 +157,7 @@ pub mod dom_mod {
         }
 
         let children = &current_root.children;
-        return add_children(children, &new_element, document);
+        return add_children(children, current_component, &new_element, document);
     }
 
     fn construct_text(text: &String, parent: &Element) -> Result<(), Error> {
@@ -132,16 +177,23 @@ pub mod dom_mod {
 
     fn construct_dom(
         current_root: &VirtualNode,
+        current_component: &Component,
         parent: &Element,
         document: &Document,
     ) -> Result<(), Error> {
         let node_type = &current_root.node_type;
         match node_type {
             NodeType::Component(component) => {
-                return construct_dom(&component.vdom, parent, document);
+                return construct_dom(&component.vdom, component, parent, document);
             }
             NodeType::Tag(tag_name) => {
-                return construct_tag(current_root, parent, document, tag_name.to_owned());
+                return construct_tag(
+                    current_root,
+                    current_component,
+                    parent,
+                    document,
+                    tag_name.to_owned(),
+                );
             }
             NodeType::Text(text) => {
                 return construct_text(text, parent);
@@ -149,7 +201,7 @@ pub mod dom_mod {
         }
     }
 
-    pub fn construct_dom_wrapper(current_root: &VirtualNode) -> Result<(), Error> {
+    pub fn construct_dom_wrapper(root_component: &Component) -> Result<(), Error> {
         let document_result = get_document();
         let document_is_ok = result_is_ok(&document_result);
         if !document_is_ok {
@@ -165,7 +217,23 @@ pub mod dom_mod {
         let document = document_result.unwrap();
         let parent = parent_result.unwrap();
 
-        let construct_dom_result = construct_dom(current_root, &parent, &document);
+        let construct_dom_result =
+            construct_dom(&root_component.vdom, root_component, &parent, &document);
+        if construct_dom_result.is_err() {
+            let msg = construct_dom_result.unwrap_err();
+            match msg {
+                Error::DomError(err) => log_1(&err),
+                Error::EvaluationError(err) => {
+                    let a = to_value(&err).unwrap();
+                    log_1(&a);
+                }
+                Error::TypeError(err) => {
+                    let a = to_value(&err).unwrap();
+                    log_1(&a);
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 }

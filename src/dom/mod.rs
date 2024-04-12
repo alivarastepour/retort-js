@@ -82,7 +82,6 @@ pub mod dom_mod {
             let TextInfo { value, variant } = attribute_value_variant_result.unwrap();
             let attr_value;
             match variant {
-                //TODO: handle the ExpressionString variant
                 TextVariant::Expression => {
                     let attr_value_result = evaluate_expression(value, current_component);
                     if attr_value_result.is_err() {

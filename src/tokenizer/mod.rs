@@ -166,7 +166,7 @@ pub mod tokenizer_mod {
     }
 
     /// Determines the type of token after tag's name is built.
-    fn get_state_after_tag_name(tag_name: String, caller: bool) -> CurrentState {
+    fn get_state_after_tag_name(tag_name: String, caller: TokenizerState) -> CurrentState {
         let collected_tag_name: Vec<char> = tag_name.chars().collect();
         let is_valid_string = collected_tag_name.iter().all(|x| x.is_alphanumeric());
         if !is_valid_string {
@@ -186,15 +186,26 @@ pub mod tokenizer_mod {
                 state: TokenizerState::Component,
             };
         } else {
-            let state = if caller {
-                TokenizerState::TagNameOpen
-            } else {
-                TokenizerState::TagNameClose
-            };
-            return CurrentState {
-                token: tag_name,
-                state,
-            };
+            let state;
+            let token;
+            match caller {
+                TokenizerState::OpenAngleBracket => {
+                    state = TokenizerState::TagNameOpen;
+                    token = tag_name;
+                }
+                TokenizerState::ClosingAngleBracket => {
+                    state = TokenizerState::TagNameClose;
+                    token = tag_name;
+                }
+                _ => {
+                    state = TokenizerState::Error(
+                    "This function shouldn't have been called with this variant of TokenizerState."
+                        .to_owned(),
+                );
+                    token = "".to_owned();
+                }
+            }
+            return CurrentState { token, state };
         }
     }
 
@@ -207,7 +218,7 @@ pub mod tokenizer_mod {
     fn proceed_from_open_angle_bracket(
         markup: &Vec<char>,
         index: &mut usize,
-        caller: bool,
+        caller: TokenizerState,
     ) -> CurrentState {
         let max = markup.len();
         let mut tag_name = String::from("");
@@ -377,7 +388,11 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index, true);
+                } = proceed_from_open_angle_bracket(
+                    &collected_markup,
+                    &mut current_index,
+                    TokenizerState::OpenAngleBracket,
+                );
                 state = state_;
                 current_index += 1;
                 return CurrentState {
@@ -473,7 +488,11 @@ pub mod tokenizer_mod {
                 let CurrentState {
                     token,
                     state: state_,
-                } = proceed_from_open_angle_bracket(&collected_markup, &mut current_index, false);
+                } = proceed_from_open_angle_bracket(
+                    &collected_markup,
+                    &mut current_index,
+                    TokenizerState::ClosingAngleBracket,
+                );
                 state = state_;
                 current_index += 1;
                 return CurrentState {

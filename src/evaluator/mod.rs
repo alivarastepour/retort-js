@@ -45,34 +45,40 @@ pub mod evaluator_mod {
         )
     }
 
+    /// Given a `JsValue` which is the result of evaluating some expression via the `window.Function`
+    /// constructor, converts it to a String. `Err` variant is returned when `evaluated_expression`
+    /// can't be converted to string, number or boolean.
     fn fill_evaluated_expression_string_result(
         evaluated_expression: JsValue,
         default: String,
     ) -> Result<String, Error> {
-        let evaluated_expression_string_result;
+        let result;
         if evaluated_expression.is_string() {
-            evaluated_expression_string_result = from_value(evaluated_expression).unwrap();
+            result = from_value(evaluated_expression).unwrap();
         } else if evaluated_expression.as_f64().is_some() {
-            let evaluated_expression_f64_result = evaluated_expression.as_f64().unwrap();
-            evaluated_expression_string_result = evaluated_expression_f64_result.to_string();
+            let converted = evaluated_expression.as_f64().unwrap();
+            result = converted.to_string();
         } else if evaluated_expression.as_bool().is_some() {
-            let evaluated_expression_bool_result = evaluated_expression.as_bool().unwrap();
-            evaluated_expression_string_result = evaluated_expression_bool_result.to_string();
+            let converted = evaluated_expression.as_bool().unwrap();
+            result = converted.to_string();
         } else {
             return Err(Error::EvaluationError(format!(
-                "The following text value didn't have any of the supported types: {default}"
+                "The following text value didn't have any of the supported(number, boolean, string) types: {default}"
             )));
         }
-        Ok(evaluated_expression_string_result)
+        Ok(result)
     }
 
+    /// Given a JS expression and context of the component which it was used in, returns a raw String
+    /// which is the evaluated result of the expression. In case of error, an `Err` variant is returned
+    /// which contains the reason.
     pub fn evaluate_expression(
         expression: String,
         current_component: &Component,
     ) -> Result<String, Error> {
         let evaluator = get_state_props_evaluator(expression.to_owned());
         let expression_evaluation_result = evaluator.call2(
-            &JsValue::undefined(),
+            &JsValue::undefined(), // not value for `this` is provided to the evaluator.
             &JsValue::from_str(&current_component.state()),
             &JsValue::from_str(&current_component.props()),
         );
@@ -96,6 +102,9 @@ pub mod evaluator_mod {
         Ok(evaluated_expression_string_result.unwrap())
     }
 
+    /// Given a String which contains a mix of JS expressions and strings plus the context of the component
+    /// which it was used in, returns a raw String which is the evaluated result of the expression.
+    /// In case of error, an `Err` variant is returned which contains the reason.
     pub fn evaluate_expression_and_string(
         string_with_expression: String,
         current_component: &Component,
@@ -137,47 +146,64 @@ pub mod evaluator_mod {
         Ok(result)
     }
 
+    /// performs a look ahead search on the validity of JS expression.
+    /// KNOWN ISSUE: this doesn't account for curly brackets in strings.
     fn has_valid_expression_inside(text: String) -> bool {
         let open_c = text.matches("{").count();
         let close_c = text.matches("}").count();
         return open_c == close_c;
     }
 
+    /// Performs a check on the wrapper chars of value of the attributes'.
+    fn is_a_valid_attribute_value(text: &str) -> bool {
+        text.starts_with("{") && text.ends_with("}")
+    }
+
+    /// Returns true if `text` is convertible to number.
+    fn attribute_value_is_number(text: &str) -> bool {
+        text.parse::<i64>().is_ok()
+    }
+
+    /// Returns true if `text` is convertible to bool.
+    fn attribute_value_is_bool(text: &str) -> bool {
+        text.parse::<bool>().is_ok()
+    }
+
+    /// Returns true if `text` is wrapped inside quotation marks.
+    fn attribute_value_is_wrapped_in_quotes(text: &str) -> bool {
+        (text.starts_with("\"") && text.ends_with("\""))
+            || (text.starts_with("'") && text.ends_with("'"))
+    }
+
+    /// determines how should a value in attribute be treated. Returns an `Ok` variant which contains
+    /// the value and its type; or `Err` variant with explanation if `text` does not follow the defined
+    /// attributes's value pattern.
     pub fn get_attribute_text_variant(text: String) -> Result<TextInfo, Error> {
         let text_trimmed = text.trim();
-        // log_1(&JsValue::from_str(&text_trimmed));
-        if text_trimmed.starts_with("{") && text_trimmed.ends_with("}") {
+        if is_a_valid_attribute_value(text_trimmed) {
             let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
-            if inside_bracket.parse::<i64>().is_ok() {
-                return Ok(TextInfo {
-                    value: inside_bracket.to_owned(),
-                    variant: TextVariant::Number,
-                });
-            } else if inside_bracket.parse::<bool>().is_ok() {
-                return Ok(TextInfo {
-                    value: inside_bracket.to_owned(),
-                    variant: TextVariant::Boolean,
-                });
-            } else if (inside_bracket.starts_with("\"") && inside_bracket.ends_with("\""))
-                || (inside_bracket.starts_with("'") && inside_bracket.ends_with("'"))
-            {
+            let variant;
+            if attribute_value_is_number(inside_bracket) {
+                variant = TextVariant::Number;
+            } else if attribute_value_is_bool(inside_bracket) {
+                variant = TextVariant::Boolean;
+            } else if attribute_value_is_wrapped_in_quotes(inside_bracket) {
                 let inside_quotes = &inside_bracket[1..inside_bracket.len() - 1];
-                let inside_quotes_has_valid_expression_inside =
+                let inside_quotes_has_valid_expression =
                     has_valid_expression_inside(inside_quotes.to_owned());
-                return Ok(TextInfo {
-                    value: inside_bracket.to_owned(),
-                    variant: if inside_quotes_has_valid_expression_inside {
-                        TextVariant::ExpressionAndString
-                    } else {
-                        TextVariant::String
-                    },
-                });
+                if inside_quotes_has_valid_expression {
+                    variant = TextVariant::ExpressionAndString;
+                } else {
+                    variant = TextVariant::String
+                }
             } else {
-                return Ok(TextInfo {
-                    value: inside_bracket.to_owned(),
-                    variant: TextVariant::Expression,
-                });
+                variant = TextVariant::Expression;
             }
+            let text_info = TextInfo {
+                value: inside_bracket.to_owned(),
+                variant,
+            };
+            return Ok(text_info);
         }
         return Err(Error::ParsingError(format!(
             "The following text value didn't have any of the supported types: {text}"

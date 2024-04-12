@@ -210,6 +210,41 @@ pub mod evaluator_mod {
         )));
     }
 
+    /// Evaluates the given value in the context of provided component.
+    /// OBSERVE: can this be reused for other evaluations too? currently, only attribution evaluation
+    /// uses this.
+    pub fn evaluate_value_to_raw_string(
+        value: String,
+        current_component: &Component,
+    ) -> Result<String, Error> {
+        let attribute_value_variant_result = get_attribute_text_variant(value.to_owned());
+        if attribute_value_variant_result.is_err() {
+            return Err(attribute_value_variant_result.unwrap_err());
+        }
+        let TextInfo { value, variant } = attribute_value_variant_result.unwrap();
+        let attr_value;
+        match variant {
+            TextVariant::Expression => {
+                let attr_value_result = evaluate_expression(value, current_component);
+                if attr_value_result.is_err() {
+                    return Err(attr_value_result.unwrap_err());
+                }
+                attr_value = attr_value_result.unwrap();
+            }
+            TextVariant::ExpressionAndString => {
+                let attr_value_result = evaluate_expression_and_string(value, current_component);
+                if attr_value_result.is_err() {
+                    return Err(attr_value_result.unwrap_err());
+                }
+                attr_value = attr_value_result.unwrap();
+            }
+            _ => {
+                attr_value = value;
+            }
+        }
+
+        Ok(attr_value)
+    }
     // tokenizer/parser
     //                                    what expression are commonly used within the context of jsx?
     // supported/not supported            1- callback registered using on`Event` attribute -> need to be explicitly imported in presenter

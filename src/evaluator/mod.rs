@@ -1,11 +1,16 @@
 pub mod evaluator_mod {
-    use std::fmt::format;
 
-    use serde_wasm_bindgen::{from_value, to_value};
-    use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-    use web_sys::{console::log_1, js_sys::Function};
+    use serde_wasm_bindgen::from_value;
+    use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+    use web_sys::js_sys::Function;
 
     use crate::{component::component_mod::Component, error::error_mod::Error};
+
+    const USE_STRICT: &str = "\"use strict\";";
+    const STATE_PARAMETER: &str = "state_";
+    const PROPS_PARAMETER: &str = "props_";
+    const CLOSURE: &str = "const state = JSON.parse(state_);const props = JSON.parse(props_);";
+    const RETURN: &str = "return ";
 
     #[derive(Debug)]
     pub enum TextVariant {
@@ -22,17 +27,22 @@ pub mod evaluator_mod {
         pub value: String,
     }
 
+    /// This block interfaces `window.Function` constructor to the rust environment.
     #[wasm_bindgen(js_namespace=window)]
     extern "C" {
         fn Function(arg1: String, arg2: String, function_string: String) -> Function;
     }
 
+    /// Evaluates the result of `function_string` in a JS context using the `window.Function`
+    /// constructor. Current component's state and props are the only values in the created
+    /// anonymous function's closure.
     fn get_state_props_evaluator(function_string: String) -> Function {
-        let function_string = "const state = JSON.parse(state_);const props = JSON.parse(props_);"
-            .to_owned()
-            + "return "
-            + &function_string;
-        Function("state_".to_owned(), "props_".to_owned(), function_string)
+        let function_body = USE_STRICT.to_owned() + CLOSURE + RETURN + &function_string;
+        Function(
+            STATE_PARAMETER.to_owned(),
+            PROPS_PARAMETER.to_owned(),
+            function_body,
+        )
     }
 
     fn fill_evaluated_expression_string_result(
@@ -67,8 +77,12 @@ pub mod evaluator_mod {
             &JsValue::from_str(&current_component.props()),
         );
         if expression_evaluation_result.is_err() {
-            let msg: String =
-                from_value(expression_evaluation_result.unwrap_err()).unwrap_or("ERR".to_owned());
+            let msg: Result<String, serde_wasm_bindgen::Error> =
+                from_value(expression_evaluation_result.unwrap_err());
+            if msg.is_err() {
+                return Err(Error::SerdeWasmBindgenError(msg.unwrap_err()));
+            }
+            let msg = msg.unwrap();
             return Err(Error::EvaluationError(format!(
                 "Failed to evaluate the following expression: {expression}: {msg}"
             )));

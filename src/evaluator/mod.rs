@@ -13,6 +13,7 @@ pub mod evaluator_mod {
         String,
         Number,
         Expression,
+        ExpressionAndString,
     }
 
     #[derive(Debug)]
@@ -34,6 +35,27 @@ pub mod evaluator_mod {
         Function("state_".to_owned(), "props_".to_owned(), function_string)
     }
 
+    fn fill_evaluated_expression_string_result(
+        evaluated_expression: JsValue,
+    ) -> Result<String, Error> {
+        let evaluated_expression_string_result;
+        if evaluated_expression.is_string() {
+            evaluated_expression_string_result = from_value(evaluated_expression).unwrap();
+        } else if evaluated_expression.as_f64().is_some() {
+            let evaluated_expression_f64_result = evaluated_expression.as_f64().unwrap();
+            evaluated_expression_string_result = evaluated_expression_f64_result.to_string();
+        } else if evaluated_expression.as_bool().is_some() {
+            let evaluated_expression_bool_result = evaluated_expression.as_bool().unwrap();
+            evaluated_expression_string_result = evaluated_expression_bool_result.to_string();
+        } else {
+            return Err(Error::EvaluationError(
+                "The following text value didn't have any of the supported types: {text}"
+                    .to_owned(),
+            ));
+        }
+        Ok(evaluated_expression_string_result)
+    }
+
     pub fn evaluate_expression(
         expression: String,
         current_component: &Component,
@@ -52,23 +74,18 @@ pub mod evaluator_mod {
             )));
         }
         let evaluated_expression = expression_evaluation_result.unwrap();
-        let evaluated_expression_string_result;
-        if evaluated_expression.is_string() {
-            evaluated_expression_string_result = from_value(evaluated_expression).unwrap();
-        } else if evaluated_expression.as_f64().is_some() {
-            let evaluated_expression_f64_result = evaluated_expression.as_f64().unwrap();
-            evaluated_expression_string_result = evaluated_expression_f64_result.to_string();
-        } else if evaluated_expression.as_bool().is_some() {
-            let evaluated_expression_bool_result = evaluated_expression.as_bool().unwrap();
-            evaluated_expression_string_result = evaluated_expression_bool_result.to_string();
-        } else {
-            return Err(Error::EvaluationError(
-                "The following text value didn't have any of the supported types: {text}"
-                    .to_owned(),
-            ));
+        let evaluated_expression_string_result =
+            fill_evaluated_expression_string_result(evaluated_expression);
+        if evaluated_expression_string_result.is_err() {
+            return Err(evaluated_expression_string_result.unwrap_err());
         }
+        Ok(evaluated_expression_string_result.unwrap())
+    }
 
-        Ok(evaluated_expression_string_result)
+    fn has_valid_expression_inside(text: String) -> bool {
+        let open_c = text.matches("{").count();
+        let close_c = text.matches("}").count();
+        return open_c == close_c;
     }
 
     pub fn get_attribute_text_variant(text: String) -> Result<TextInfo, Error> {
@@ -88,9 +105,16 @@ pub mod evaluator_mod {
             } else if (inside_bracket.starts_with("\"") && inside_bracket.ends_with("\""))
                 || (inside_bracket.starts_with("'") && inside_bracket.ends_with("'"))
             {
+                let inside_quotes = &inside_bracket[1..inside_bracket.len() - 1];
+                let inside_quotes_has_valid_expression_inside =
+                    has_valid_expression_inside(inside_quotes.to_owned());
                 return Ok(TextInfo {
                     value: inside_bracket.to_owned(),
-                    variant: TextVariant::String,
+                    variant: if inside_quotes_has_valid_expression_inside {
+                        TextVariant::ExpressionAndString
+                    } else {
+                        TextVariant::String
+                    },
                 });
             } else {
                 return Ok(TextInfo {

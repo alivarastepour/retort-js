@@ -92,19 +92,19 @@ pub mod parser_mod {
 
     /// This is a hack to remove extra chars that wrap literal values;
     /// if value in prop is not a literal, it is returned unmodified.
-    fn custom_trim(value: &String) -> String {
-        let trimmed_value = value.trim();
-        if value.starts_with("{") && value.ends_with("}") {
-            let value = &trimmed_value[1..trimmed_value.len() - 1]; // dive: why does this expression resolve to
-                                                                    //  a value of type str instead of &str if & was removed
-            let trimmed_value = value.trim();
-            if value.starts_with("\"") && value.ends_with("\"") {
-                let value = &trimmed_value[1..trimmed_value.len() - 1];
-                return value.to_owned();
-            }
-        }
-        return value.to_owned();
-    }
+    // fn custom_trim(value: &String) -> String {
+    //     let trimmed_value = value.trim();
+    //     if value.starts_with("{") && value.ends_with("}") {
+    //         let value = &trimmed_value[1..trimmed_value.len() - 1]; // dive: why does this expression resolve to
+    //                                                                 //  a value of type str instead of &str if & was removed
+    //         let trimmed_value = value.trim();
+    //         if value.starts_with("\"") && value.ends_with("\"") {
+    //             let value = &trimmed_value[1..trimmed_value.len() - 1];
+    //             return value.to_owned();
+    //         }
+    //     }
+    //     return value.to_owned();
+    // }
 
     /// Given an object of type `ParsedPresenter`, constructs a vdom using the `tokenizer` module.
     /// If an error is encountered, an `Err` variant is returned explaining why; `Ok` otherwise,
@@ -192,7 +192,7 @@ pub mod parser_mod {
                     let mut key_value_split = token.split('=');
                     let key = key_value_split.next().unwrap().to_owned();
                     let value = key_value_split.next().unwrap().to_owned();
-                    let value = custom_trim(&value);
+                    // let value = custom_trim(&value);
                     attrs.insert(key, value);
                 }
                 TokenizerState::SelfClosingAngleBracket => {

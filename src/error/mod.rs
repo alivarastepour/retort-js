@@ -7,6 +7,7 @@ pub mod error_mod {
         ReferenceError(String),
         TypeError(String),
         ResolveError(String),
+        EvaluationError(String),
         DomError(JsValue),
         SerdeWasmBindgenError(serde_wasm_bindgen::Error),
     }

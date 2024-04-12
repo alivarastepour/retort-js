@@ -3,7 +3,7 @@ pub mod evaluator_mod {
 
     use serde_wasm_bindgen::{from_value, to_value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-    use web_sys::js_sys::Function;
+    use web_sys::{console::log_1, js_sys::Function};
 
     use crate::{component::component_mod::Component, error::error_mod::Error};
 
@@ -37,6 +37,7 @@ pub mod evaluator_mod {
 
     fn fill_evaluated_expression_string_result(
         evaluated_expression: JsValue,
+        default: String,
     ) -> Result<String, Error> {
         let evaluated_expression_string_result;
         if evaluated_expression.is_string() {
@@ -48,10 +49,9 @@ pub mod evaluator_mod {
             let evaluated_expression_bool_result = evaluated_expression.as_bool().unwrap();
             evaluated_expression_string_result = evaluated_expression_bool_result.to_string();
         } else {
-            return Err(Error::EvaluationError(
-                "The following text value didn't have any of the supported types: {text}"
-                    .to_owned(),
-            ));
+            return Err(Error::EvaluationError(format!(
+                "The following text value didn't have any of the supported types: {default}"
+            )));
         }
         Ok(evaluated_expression_string_result)
     }
@@ -75,11 +75,52 @@ pub mod evaluator_mod {
         }
         let evaluated_expression = expression_evaluation_result.unwrap();
         let evaluated_expression_string_result =
-            fill_evaluated_expression_string_result(evaluated_expression);
+            fill_evaluated_expression_string_result(evaluated_expression, expression);
         if evaluated_expression_string_result.is_err() {
             return Err(evaluated_expression_string_result.unwrap_err());
         }
         Ok(evaluated_expression_string_result.unwrap())
+    }
+
+    pub fn evaluate_expression_and_string(
+        string_with_expression: String,
+        current_component: &Component,
+    ) -> Result<String, Error> {
+        let mut result: String = String::new();
+        let mut current_expression: String = String::new();
+        let string_with_expression_chars: Vec<char> = string_with_expression.chars().collect();
+        let mut expression_stack = Vec::new();
+        for chr in string_with_expression_chars {
+            if chr == '{' {
+                expression_stack.push('{');
+            } else if chr == '}' {
+                let head = expression_stack.pop();
+                if head.is_none() {
+                    return Err(Error::ParsingError(format!("There was an error while parsing the following expression: {string_with_expression}. You have probably messed up some curly brackets.")));
+                }
+                if expression_stack.is_empty() {
+                    let evaluated_expression_result =
+                        evaluate_expression(current_expression, current_component);
+                    if evaluated_expression_result.is_err() {
+                        return Err(evaluated_expression_result.unwrap_err());
+                    }
+                    let evaluated_expression = evaluated_expression_result.unwrap();
+                    result += &evaluated_expression;
+                    current_expression = "".to_owned();
+                } else {
+                    return Err(Error::_InvestigationNeeded(
+                        "Observe: when does this happen?".to_owned(),
+                    ));
+                }
+            } else {
+                if expression_stack.is_empty() {
+                    result += &chr.to_string();
+                } else {
+                    current_expression += &chr.to_string();
+                }
+            }
+        }
+        Ok(result)
     }
 
     fn has_valid_expression_inside(text: String) -> bool {
@@ -90,6 +131,7 @@ pub mod evaluator_mod {
 
     pub fn get_attribute_text_variant(text: String) -> Result<TextInfo, Error> {
         let text_trimmed = text.trim();
+        // log_1(&JsValue::from_str(&text_trimmed));
         if text_trimmed.starts_with("{") && text_trimmed.ends_with("}") {
             let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
             if inside_bracket.parse::<i64>().is_ok() {

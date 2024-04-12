@@ -9,7 +9,10 @@ pub mod component_mod {
     use serde_json::{from_str, to_string, Error, Map, Value};
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::js_sys::Function;
+    use web_sys::{
+        console::{log_1, time, time_end},
+        js_sys::Function,
+    };
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -225,6 +228,8 @@ pub mod component_mod {
                 return Err(err);
             }
             let virtual_node = virtual_node_result.unwrap();
+            let a = to_value(&virtual_node).unwrap();
+            log_1(&a);
             Ok(virtual_node)
 
             // NOTE: comments are some what deprecated but not removed because they still provide road map
@@ -289,7 +294,9 @@ pub mod component_mod {
         }
 
         pub fn mount(&mut self) {
-            let res = construct_dom_wrapper(&self.vdom);
+            time();
+            let res = construct_dom_wrapper(&self);
+            time_end();
         }
     }
 }

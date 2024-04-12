@@ -12,7 +12,8 @@ pub mod dom_mod {
         component::component_mod::Component,
         error::error_mod::Error,
         evaluator::evaluator_mod::{
-            evaluate_expression, get_attribute_text_variant, TextInfo, TextVariant,
+            evaluate_expression, evaluate_expression_and_string, get_attribute_text_variant,
+            TextInfo, TextVariant,
         },
         parser::parser_mod::{NodeType, VirtualNode},
         util::util_mod::{option_has_value, result_is_ok},
@@ -81,19 +82,24 @@ pub mod dom_mod {
             let TextInfo { value, variant } = attribute_value_variant_result.unwrap();
             let attr_value;
             match variant {
+                //TODO: handle the ExpressionString variant
                 TextVariant::Expression => {
-                    // time();
                     let attr_value_result = evaluate_expression(value, current_component);
                     if attr_value_result.is_err() {
                         return Err(attr_value_result.unwrap_err());
                     }
                     attr_value = attr_value_result.unwrap();
-                    // time_end();
+                }
+                TextVariant::ExpressionAndString => {
+                    let attr_value_result =
+                        evaluate_expression_and_string(value, current_component);
+                    if attr_value_result.is_err() {
+                        return Err(attr_value_result.unwrap_err());
+                    }
+                    attr_value = attr_value_result.unwrap();
                 }
                 _ => {
-                    // time();
                     attr_value = value;
-                    // time_end();
                 }
             }
 
@@ -231,7 +237,17 @@ pub mod dom_mod {
                     let a = to_value(&err).unwrap();
                     log_1(&a);
                 }
-                _ => {}
+                Error::ResolveError(err) => {
+                    let a = to_value(&err).unwrap();
+                    log_1(&a);
+                }
+                Error::ParsingError(err) => {
+                    let a = to_value(&err).unwrap();
+                    log_1(&a);
+                }
+                _ => {
+                    log_1(&JsValue::from_str("err"));
+                }
             }
         }
         Ok(())

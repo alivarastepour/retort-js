@@ -9,6 +9,7 @@ pub mod error_mod {
         ResolveError(String),
         EvaluationError(String),
         DomError(JsValue),
+        _InvestigationNeeded(String),
         SerdeWasmBindgenError(serde_wasm_bindgen::Error),
     }
 }

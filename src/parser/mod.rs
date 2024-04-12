@@ -189,11 +189,11 @@ pub mod parser_mod {
                 TokenizerState::Props => {
                     let owner_node = stack.get_mut(stack_size - 1).unwrap();
                     let attrs = &mut owner_node.attributes;
-                    let mut key_value_split = token.split('=');
-                    let key = key_value_split.next().unwrap().to_owned();
-                    let value = key_value_split.next().unwrap().to_owned();
+                    let key_value_split = token.split_once("=").unwrap();
+                    // let key = key_value_split.next().unwrap().to_owned();
+                    // let value = key_value_split.next().unwrap().to_owned();
                     // let value = custom_trim(&value);
-                    attrs.insert(key, value);
+                    attrs.insert(key_value_split.0.to_owned(), key_value_split.1.to_owned());
                 }
                 TokenizerState::SelfClosingAngleBracket => {
                     let completed_node = stack.pop().unwrap();

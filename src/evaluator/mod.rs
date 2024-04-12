@@ -28,15 +28,16 @@ pub mod evaluator_mod {
         // expression.replace_range(range, replace_with)
     }
 
-    // what expression are commonly used within the context of jsx?
-    // 1- callback registered using on`Event` attribute -> need to be explicitly imported in presenter
-    // 2- attributes and props that are evaluated using a call to a function -> need to be explicitly imported in the presenter
-    // 3- passing states and props as they are -> ez
-    // 4- using operators(nullish coalescing, ternary operator, etc) to evaluate the value of an attribute or prop. -> new Function syntax
-    // 5- constant values defined higher in the scope -> not gonna happen
-    // 6- primitive data types like string, number and boolean -> they'll be treated like expressions: new Function syntax
-    // 7- using operators to render jsx content conditionally
-    // 8- using map to render a list of data
+    // tokenizer/parser
+    //                                    what expression are commonly used within the context of jsx?
+    // supported/not supported            1- callback registered using on`Event` attribute -> need to be explicitly imported in presenter
+    // supported/not supported            2- attributes and props that are evaluated using a call to a function -> need to be explicitly imported in the presenter
+    // supported/not supported            3- passing states and props as they are -> ez
+    // supported/not supported            4- using operators(nullish coalescing, ternary operator, etc) to evaluate the value of an attribute or prop. -> new Function syntax
+    // won't be considered                5- constant values defined higher in the scope -> not gonna happen
+    // supported/not supported            6- primitive data types like string, number and boolean -> they'll be treated like expressions: new Function syntax
+    // supported/not supported            7- using operators to render jsx content conditionally
+    // supported/not supported            8- using map to render a list of data
 
     // handling 1:
     // although this can be easily replaced with the addEventListener functionality, we can't ignore the

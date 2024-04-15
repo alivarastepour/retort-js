@@ -118,14 +118,14 @@ pub mod parser_mod {
         let mut stack_size: usize = 0;
         let mut vdom: Vec<VirtualNode> = Vec::new();
         loop {
-            let CurrentState { state, token } = get_next_token();
+            let next_token_result = get_next_token();
+            if next_token_result.is_err() {
+                return Err(next_token_result.unwrap_err());
+            }
+            let CurrentState { state, token } = next_token_result.unwrap();
             match state {
                 TokenizerState::Finalized => {
                     return get_parser_return_value(stack);
-                }
-                TokenizerState::Error(err) => {
-                    let err = format!("[ERROR] {err}");
-                    return Err(CustomError::ParsingError(err));
                 }
                 TokenizerState::TagNameClose => {
                     let completed_node = stack.pop().unwrap();

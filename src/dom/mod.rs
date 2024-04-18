@@ -98,11 +98,12 @@ pub mod dom_mod {
             let construct_result;
             match node_type {
                 NodeType::Component(component) => {
-                    construct_result = self::construct_dom(child, &component, &element, &document);
+                    construct_result =
+                        self::construct_dom(child, &component, &element, &document, true);
                 }
                 _ => {
                     construct_result =
-                        self::construct_dom(child, current_component, &element, &document);
+                        self::construct_dom(child, current_component, &element, &document, false);
                 }
             }
             if construct_result.is_err() {
@@ -144,8 +145,17 @@ pub mod dom_mod {
 
     /// Crates a text node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
-    fn construct_text(text: &String, parent: &Element) -> Result<(), Error> {
-        let text_element_result = Text::new_with_data(text);
+    fn construct_text(
+        text: &String,
+        parent: &Element,
+        current_component: &Component,
+    ) -> Result<(), Error> {
+        // let text_value_result = evaluate_value_to_raw_string(text.to_owned(), current_component);
+        // if text_value_result.is_err() {
+        //     return Err(text_value_result.unwrap_err());
+        // }
+        // let text = text_value_result.unwrap();
+        let text_element_result = Text::new_with_data(&text);
         if text_element_result.is_err() {
             return Err(Error::DomError(text_element_result.unwrap_err()));
         }
@@ -166,14 +176,17 @@ pub mod dom_mod {
         current_component: &Component,
         parent: &Element,
         document: &Document,
+        caller_is_component_node: bool,
     ) -> Result<(), Error> {
         let node_type = &current_root.node_type;
+        let res;
         match node_type {
             NodeType::Component(component) => {
-                return construct_dom(&component.vdom, component, parent, document);
+                res = construct_dom(&component.vdom, component, parent, document, true);
+                // return res;
             }
             NodeType::Tag(tag_name) => {
-                return construct_tag(
+                res = construct_tag(
                     current_root,
                     current_component,
                     parent,
@@ -182,9 +195,19 @@ pub mod dom_mod {
                 );
             }
             NodeType::Text(text) => {
-                return construct_text(text, parent);
+                res = construct_text(text, parent, current_component);
             }
         }
+        // if caller_is_component_node {
+        //     let mount_res = current_component.call_component_did_mount();
+        //     if mount_res.is_err() {
+        //         let msg = mount_res.unwrap_err().as_string().unwrap_or("".to_owned());
+        //         return Err(Error::_InvestigationNeeded(format!(
+        //             "Call to component did mount resulted in error: {msg}"
+        //         )));
+        //     }
+        // }
+        return res;
     }
 
     /// Encapsulates the logic of preparing arguments for `self::construct_dom` function
@@ -202,8 +225,13 @@ pub mod dom_mod {
         let document = document_result.unwrap();
         let parent = parent_result.unwrap();
 
-        let construct_dom_result =
-            construct_dom(&root_component.vdom, root_component, &parent, &document);
+        let construct_dom_result = construct_dom(
+            &root_component.vdom,
+            root_component,
+            &parent,
+            &document,
+            true,
+        );
         if construct_dom_result.is_err() {
             let msg = construct_dom_result.unwrap_err();
             match msg {
@@ -232,3 +260,10 @@ pub mod dom_mod {
         Ok(())
     }
 }
+
+// <div>hello world</div>
+// <div>hello {state.value}</div>
+// <div>{state.value > 4 ? <span>xx</span> : <p>yx</p>}</div>
+// <div>{state.value > 4 ? <span>xx</span> : <p>{state.value > 2 ? <span>aa</span> : <p>b</p>}</p>}</div>
+// <div>{state.value ?? state.x ?? state.y ?? 0}</div>
+// <div>{state.value ? "hi" : "Bye"}</div>

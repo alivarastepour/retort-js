@@ -39,7 +39,7 @@ pub mod component_mod {
                 presenter: self.presenter.clone(),
                 props: self.props.to_owned(),
                 state: self.state.to_owned(),
-                component_did_mount: self.component_did_mount.to_owned(),
+                component_did_mount: self.component_did_mount.clone(),
                 vdom: Box::from(self.vdom.deref().to_owned()),
             }
         }
@@ -74,6 +74,12 @@ pub mod component_mod {
         #[wasm_bindgen(getter)]
         pub fn component_did_mount(&self) -> Function {
             self.component_did_mount.clone()
+        }
+
+        #[wasm_bindgen]
+        pub fn call_component_did_mount(&self) -> Result<JsValue, JsValue> {
+            let res = self.component_did_mount.call0(&JsValue::null());
+            return res;
         }
 
         #[wasm_bindgen(getter)]
@@ -296,6 +302,8 @@ pub mod component_mod {
         pub fn mount(&mut self) {
             time();
             let res = construct_dom_wrapper(&self);
+            // self.component_did_mount.call0(&JsValue::undefined());
+            // self.call_component_did_mount();
             time_end();
         }
     }

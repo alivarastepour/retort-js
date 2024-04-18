@@ -183,24 +183,30 @@ pub mod evaluator_mod {
         if is_a_valid_attribute_value(text_trimmed) {
             let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
             let variant;
+            let value;
             if attribute_value_is_number(inside_bracket) {
                 variant = TextVariant::Number;
+                value = inside_bracket;
             } else if attribute_value_is_bool(inside_bracket) {
                 variant = TextVariant::Boolean;
+                value = inside_bracket;
             } else if attribute_value_is_wrapped_in_quotes(inside_bracket) {
                 let inside_quotes = &inside_bracket[1..inside_bracket.len() - 1];
                 let inside_quotes_has_valid_expression =
                     has_valid_expression_inside(inside_quotes.to_owned());
                 if inside_quotes_has_valid_expression {
                     variant = TextVariant::ExpressionAndString;
+                    value = inside_quotes;
                 } else {
-                    variant = TextVariant::String
+                    variant = TextVariant::String;
+                    value = inside_quotes;
                 }
             } else {
                 variant = TextVariant::Expression;
+                value = inside_bracket;
             }
             let text_info = TextInfo {
-                value: inside_bracket.to_owned(),
+                value: value.to_string(),
                 variant,
             };
             return Ok(text_info);
@@ -289,4 +295,20 @@ pub mod evaluator_mod {
     // literal text and js expressions like conditional rendering and rendering lists using map.
     // or we can ignore this for the time being and assume that each tag has either literal text or
     // expressions and not both of them at the same time.
+
+    // how should we handle values inside tags?
+    // rn, they are all treated as Text, but they most obviously shouldn't.
+    // 1- given a Text variant, we need to determine how it should be treated, just like we did
+    //    with attributes.
+    // 2- why not the same functionality? because they differ. attributes are wrapped inside
+    //    curly brackets plus quotation marks, but Text inside tags is not.
+    // 3- so we should first determine the type; it can be one of the following:
+    //    - only value: <div>hello world</div>
+    //    - value with expression(no tag): <div>hello {state.value}</div>
+    //    - expression(no tag): <div>{state.value ? "hi" : "Bye"}</div>
+    //    - expression(with tag): <div>{state.value > 4 ? <span>xx</span> : <p>yx</p>}</div>
+    //    - nested tag expressions: <div>{state.value > 4 ? <span>xx</span> : <p>{state.value > 2 ? <span>aa</span> : <p>b</p>}</p>}</div>
+    // 4- what are complications? we can't directly evaluate expressions that contain tags.
+    // 5- so overall, we need to cover the following scenarios: only-value, value-expression-no-tag and
+    //    value-expression-tag
 }

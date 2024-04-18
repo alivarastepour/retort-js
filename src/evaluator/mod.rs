@@ -13,7 +13,7 @@ pub mod evaluator_mod {
     const RETURN: &str = "return ";
 
     #[derive(Debug)]
-    pub enum TextVariant {
+    pub enum AttributeTextVariant {
         Boolean,
         String,
         Number,
@@ -21,9 +21,20 @@ pub mod evaluator_mod {
         ExpressionAndString,
     }
 
+    #[derive(Debug, Clone)]
+    pub enum NonDeterminedTagContentTextVariant {
+        Value(String),
+        Expression(String),
+    }
+    pub enum DeterminedTagContentTextVariant {
+        Value(String),
+        ExpressionNoTag(String),
+        ExpressionWithTag(String),
+    }
+
     #[derive(Debug)]
-    pub struct TextInfo {
-        pub variant: TextVariant,
+    pub struct TextInfo<T> {
+        pub variant: T,
         pub value: String,
     }
 
@@ -102,6 +113,52 @@ pub mod evaluator_mod {
         Ok(evaluated_expression_string_result.unwrap())
     }
 
+    fn extract_expression_and_string(
+        string_with_expression: String,
+    ) -> Result<Vec<NonDeterminedTagContentTextVariant>, Error> {
+        let string_with_expression_chars: Vec<char> = string_with_expression.chars().collect();
+        let mut result: Vec<NonDeterminedTagContentTextVariant> = Vec::new();
+        let mut expression_stack = Vec::new();
+        let mut current_expression: String = String::new();
+        let mut current_string: String = String::new();
+        for chr in string_with_expression_chars {
+            if chr == '{' {
+                expression_stack.push('{');
+                if !current_string.is_empty() {
+                    result.push(NonDeterminedTagContentTextVariant::Value(
+                        current_string.clone(),
+                    ));
+                }
+                current_string.clear();
+                current_expression += "{";
+            } else if chr == '}' {
+                let head = expression_stack.pop();
+                if head.is_none() {
+                    return Err(Error::ParsingError(format!("There was an error while parsing the following expression: {string_with_expression}. You have probably messed up some curly brackets.")));
+                }
+                current_expression += &chr.to_string();
+                if expression_stack.is_empty() {
+                    result.push(NonDeterminedTagContentTextVariant::Expression(
+                        current_expression.clone(),
+                    ));
+                    current_expression.clear();
+                }
+            } else {
+                if expression_stack.is_empty() {
+                    current_string += &chr.to_string();
+                } else {
+                    current_expression += &chr.to_string();
+                }
+            }
+        }
+        if !current_string.is_empty() {
+            result.push(NonDeterminedTagContentTextVariant::Value(
+                current_string.clone(),
+            ));
+        }
+        Ok(result)
+    }
+
     /// Given a String which contains a mix of JS expressions and strings plus the context of the component
     /// which it was used in, returns a raw String which is the evaluated result of the expression.
     /// In case of error, an `Err` variant is returned which contains the reason.
@@ -178,31 +235,33 @@ pub mod evaluator_mod {
     /// determines how should a value in attribute be treated. Returns an `Ok` variant which contains
     /// the value and its type; or `Err` variant with explanation if `text` does not follow the defined
     /// attributes's value pattern.
-    pub fn get_attribute_text_variant(text: String) -> Result<TextInfo, Error> {
+    pub fn get_attribute_text_variant(
+        text: String,
+    ) -> Result<TextInfo<AttributeTextVariant>, Error> {
         let text_trimmed = text.trim();
         if is_a_valid_attribute_value(text_trimmed) {
             let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
             let variant;
             let value;
             if attribute_value_is_number(inside_bracket) {
-                variant = TextVariant::Number;
+                variant = AttributeTextVariant::Number;
                 value = inside_bracket;
             } else if attribute_value_is_bool(inside_bracket) {
-                variant = TextVariant::Boolean;
+                variant = AttributeTextVariant::Boolean;
                 value = inside_bracket;
             } else if attribute_value_is_wrapped_in_quotes(inside_bracket) {
                 let inside_quotes = &inside_bracket[1..inside_bracket.len() - 1];
                 let inside_quotes_has_valid_expression =
                     has_valid_expression_inside(inside_quotes.to_owned());
                 if inside_quotes_has_valid_expression {
-                    variant = TextVariant::ExpressionAndString;
+                    variant = AttributeTextVariant::ExpressionAndString;
                     value = inside_quotes;
                 } else {
-                    variant = TextVariant::String;
+                    variant = AttributeTextVariant::String;
                     value = inside_quotes;
                 }
             } else {
-                variant = TextVariant::Expression;
+                variant = AttributeTextVariant::Expression;
                 value = inside_bracket;
             }
             let text_info = TextInfo {
@@ -230,14 +289,14 @@ pub mod evaluator_mod {
         let TextInfo { value, variant } = attribute_value_variant_result.unwrap();
         let attr_value;
         match variant {
-            TextVariant::Expression => {
+            AttributeTextVariant::Expression => {
                 let attr_value_result = evaluate_expression(value, current_component);
                 if attr_value_result.is_err() {
                     return Err(attr_value_result.unwrap_err());
                 }
                 attr_value = attr_value_result.unwrap();
             }
-            TextVariant::ExpressionAndString => {
+            AttributeTextVariant::ExpressionAndString => {
                 let attr_value_result = evaluate_expression_and_string(value, current_component);
                 if attr_value_result.is_err() {
                     return Err(attr_value_result.unwrap_err());
@@ -251,6 +310,29 @@ pub mod evaluator_mod {
 
         Ok(attr_value)
     }
+
+    
+
+    fn get_tag_content_variant(text: String) -> Result<(), Error> {
+        let collected_expression_and_string_result = extract_expression_and_string(text);
+        if collected_expression_and_string_result.is_err() {
+            return Err(collected_expression_and_string_result.unwrap_err());
+        }
+        let mut result: Vec<DeterminedTagContentTextVariant> = Vec::new();
+        let collected_expression_and_string = collected_expression_and_string_result.unwrap();
+        for value in collected_expression_and_string {
+            match value {
+                NonDeterminedTagContentTextVariant::Expression(exp) => {
+
+                }
+                NonDeterminedTagContentTextVariant::Value(val) => {
+                    result.push(DeterminedTagContentTextVariant::Value(val))
+                }
+            }
+        }
+        Ok(())
+    }
+
     // tokenizer/parser
     //                                    what expression are commonly used within the context of jsx?
     // supported/not supported            1- callback registered using on`Event` attribute -> need to be explicitly imported in presenter

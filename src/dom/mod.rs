@@ -12,6 +12,19 @@ pub mod dom_mod {
         parser::parser_mod::{NodeType, VirtualNode},
     };
 
+    /// Represents the valid states for `render-*` attributes in each scope. `NotReached` indicates
+    /// that no `render-if` attribute has been reached yet, or an `if-else` expression has already
+    /// finished(thus it has no effect on the next `if-else` expressions). `True` indicates that one
+    /// of the earlier expressions have evaluated to `true`, thus other `else-if`s should not be added.
+    /// `False` indicates that there have been some clauses, but non of them have evaluated to true thus
+    /// far.
+    #[derive(Debug)]
+    enum IfExprState {
+        NotReached,
+        True,
+        False,
+    }
+
     const APP_WRAPPER_ID: &str = "root";
 
     /// Returns an `Ok` variant if window object was found successfully; an `Err` variant otherwise.
@@ -85,7 +98,10 @@ pub mod dom_mod {
         Ok(())
     }
 
-    /// Recursively calls the `self::construct_dom` function on each child of the current virtual node.
+    /// Recursively calls the `self::construct_dom` function on each child of the current virtual node;
+    /// This is when a child doesn't have a `render-*` special attribute. If it has one of those attributes,
+    /// It will be added to the DOM only if its evaluated result is true according to how `if-else` expressions
+    /// are evaluated.
     /// Returns an `Err` variant if an `Err` variant is returned from any of the calls to `self::construct_dom`.
     fn add_children(
         children: &Vec<VirtualNode>,
@@ -93,17 +109,27 @@ pub mod dom_mod {
         element: &Element,
         document: &Document,
     ) -> Result<(), Error> {
+        let mut if_state_expr: IfExprState = IfExprState::NotReached;
         for child in children {
+            let render_node_result: Result<(bool, IfExprState), Error> =
+                should_node_render(child, if_state_expr, current_component);
+            if render_node_result.is_err() {
+                return Err(render_node_result.unwrap_err());
+            }
+            let (should_add, new_if_state_expr) = render_node_result.unwrap();
+            if_state_expr = new_if_state_expr;
+            if !should_add {
+                continue;
+            }
             let node_type = &child.node_type;
             let construct_result;
             match node_type {
                 NodeType::Component(component) => {
-                    construct_result =
-                        self::construct_dom(child, &component, &element, &document, true);
+                    construct_result = self::construct_dom(child, &component, &element, &document);
                 }
                 _ => {
                     construct_result =
-                        self::construct_dom(child, current_component, &element, &document, false);
+                        self::construct_dom(child, current_component, &element, &document);
                 }
             }
             if construct_result.is_err() {
@@ -145,16 +171,7 @@ pub mod dom_mod {
 
     /// Crates a text node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
-    fn construct_text(
-        text: &String,
-        parent: &Element,
-        current_component: &Component,
-    ) -> Result<(), Error> {
-        // let text_value_result = evaluate_value_to_raw_string(text.to_owned(), current_component);
-        // if text_value_result.is_err() {
-        //     return Err(text_value_result.unwrap_err());
-        // }
-        // let text = text_value_result.unwrap();
+    fn construct_text(text: &String, parent: &Element) -> Result<(), Error> {
         let text_element_result = Text::new_with_data(&text);
         if text_element_result.is_err() {
             return Err(Error::DomError(text_element_result.unwrap_err()));
@@ -168,6 +185,79 @@ pub mod dom_mod {
         Ok(())
     }
 
+    /// Given a node, the context of the component which it was used in and the previous state of
+    /// `render-*`, determines whether a node should be added to the DOM or not. If no error happens,
+    /// it returns an `Ok` variant which contains a tuple indicating if the node should be rendered, and
+    /// the next state of `render-*` in the scope.
+    fn should_node_render(
+        current_root: &VirtualNode,
+        if_state_expr: IfExprState,
+        current_component: &Component,
+    ) -> Result<(bool, IfExprState), Error> {
+        let attrs = &current_root.attributes;
+        let if_ = attrs.get("render-if");
+        let else_if = attrs.get("render-else-if");
+        let else_ = attrs.get("render-else");
+
+        if if_.is_some() {
+            let if_value = if_.unwrap();
+            let evaluated_if_value_result =
+                evaluate_value_to_raw_string(if_value.to_owned(), current_component);
+            if evaluated_if_value_result.is_ok() {
+                let evaluated_if_value: String = evaluated_if_value_result.unwrap();
+                let res = evaluated_if_value == "true";
+                let new_state;
+                if res {
+                    new_state = IfExprState::True;
+                } else {
+                    new_state = IfExprState::False;
+                }
+                return Ok((res, new_state));
+            } else {
+                return Err(evaluated_if_value_result.unwrap_err());
+            }
+        } else if else_if.is_some() {
+            match if_state_expr {
+                IfExprState::False => {}
+                IfExprState::True => {
+                    return Ok((false, if_state_expr));
+                }
+                IfExprState::NotReached => {
+                    return Err(Error::ParsingError(
+                        "Didn't expect a render-else-if attribute.".to_owned(),
+                    ));
+                }
+            }
+            let else_if_value = else_if.unwrap();
+            let evaluated_else_if_value_result =
+                evaluate_value_to_raw_string(else_if_value.to_owned(), current_component);
+            if evaluated_else_if_value_result.is_ok() {
+                let evaluated_else_if_value = evaluated_else_if_value_result.unwrap();
+                let res = evaluated_else_if_value == "true";
+                let new_state;
+                if res {
+                    new_state = IfExprState::True;
+                } else {
+                    new_state = IfExprState::False;
+                }
+                return Ok((res, new_state));
+            } else {
+                return Err(evaluated_else_if_value_result.unwrap_err());
+            }
+        } else if else_.is_some() {
+            match if_state_expr {
+                IfExprState::False => return Ok((true, IfExprState::NotReached)),
+                IfExprState::True => return Ok((false, IfExprState::NotReached)),
+                IfExprState::NotReached => {
+                    return Err(Error::ParsingError(
+                        "Didn't expect a `render-else` attribute.".to_owned(),
+                    ))
+                }
+            }
+        }
+        return Ok((true, if_state_expr));
+    }
+
     /// Constructs DOM using the provided virtual node and component as a root. Returns `Ok` variant
     /// if no errors are encountered while building DOM; an `Err` variant otherwise, explaining what
     /// went wrong.
@@ -176,14 +266,21 @@ pub mod dom_mod {
         current_component: &Component,
         parent: &Element,
         document: &Document,
-        caller_is_component_node: bool,
     ) -> Result<(), Error> {
         let node_type = &current_root.node_type;
         let res;
         match node_type {
             NodeType::Component(component) => {
-                res = construct_dom(&component.vdom, component, parent, document, true);
-                // return res;
+                let render_node_result: Result<(bool, IfExprState), Error> =
+                    should_node_render(&component.vdom, IfExprState::NotReached, component);
+                if render_node_result.is_err() {
+                    return Err(render_node_result.unwrap_err());
+                }
+                let should_add = render_node_result.unwrap().0;
+                if !should_add {
+                    return Ok(());
+                }
+                res = construct_dom(&component.vdom, component, parent, document);
             }
             NodeType::Tag(tag_name) => {
                 res = construct_tag(
@@ -195,18 +292,9 @@ pub mod dom_mod {
                 );
             }
             NodeType::Text(text) => {
-                res = construct_text(text, parent, current_component);
+                res = construct_text(text, parent);
             }
         }
-        // if caller_is_component_node {
-        //     let mount_res = current_component.call_component_did_mount();
-        //     if mount_res.is_err() {
-        //         let msg = mount_res.unwrap_err().as_string().unwrap_or("".to_owned());
-        //         return Err(Error::_InvestigationNeeded(format!(
-        //             "Call to component did mount resulted in error: {msg}"
-        //         )));
-        //     }
-        // }
         return res;
     }
 
@@ -225,13 +313,21 @@ pub mod dom_mod {
         let document = document_result.unwrap();
         let parent = parent_result.unwrap();
 
-        let construct_dom_result = construct_dom(
+        let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
             &root_component.vdom,
+            IfExprState::NotReached,
             root_component,
-            &parent,
-            &document,
-            true,
         );
+        if render_node_result.is_err() {
+            return Err(render_node_result.unwrap_err());
+        }
+        let should_add = render_node_result.unwrap().0;
+        if !should_add {
+            return Ok(());
+        }
+
+        let construct_dom_result =
+            construct_dom(&root_component.vdom, root_component, &parent, &document);
         if construct_dom_result.is_err() {
             let msg = construct_dom_result.unwrap_err();
             match msg {
@@ -260,10 +356,3 @@ pub mod dom_mod {
         Ok(())
     }
 }
-
-// <div>hello world</div>
-// <div>hello {state.value}</div>
-// <div>{state.value > 4 ? <span>xx</span> : <p>yx</p>}</div>
-// <div>{state.value > 4 ? <span>xx</span> : <p>{state.value > 2 ? <span>aa</span> : <p>b</p>}</p>}</div>
-// <div>{state.value ?? state.x ?? state.y ?? 0}</div>
-// <div>{state.value ? "hi" : "Bye"}</div>

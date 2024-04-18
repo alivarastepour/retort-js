@@ -12,6 +12,9 @@ pub mod dom_mod {
         parser::parser_mod::{NodeType, VirtualNode},
     };
 
+    // future reference: the logic for determining whether a node should render or not has been repeated
+    // 3 times in this module. IDK how to generalize it.
+
     /// Represents the valid states for `render-*` attributes in each scope. `NotReached` indicates
     /// that no `render-if` attribute has been reached yet, or an `if-else` expression has already
     /// finished(thus it has no effect on the next `if-else` expressions). `True` indicates that one
@@ -272,7 +275,7 @@ pub mod dom_mod {
         match node_type {
             NodeType::Component(component) => {
                 let render_node_result: Result<(bool, IfExprState), Error> =
-                    should_node_render(&component.vdom, IfExprState::NotReached, component);
+                    should_node_render(&component.get_vdom(), IfExprState::NotReached, component);
                 if render_node_result.is_err() {
                     return Err(render_node_result.unwrap_err());
                 }
@@ -280,7 +283,7 @@ pub mod dom_mod {
                 if !should_add {
                     return Ok(());
                 }
-                res = construct_dom(&component.vdom, component, parent, document);
+                res = construct_dom(&component.get_vdom(), component, parent, document);
             }
             NodeType::Tag(tag_name) => {
                 res = construct_tag(
@@ -314,7 +317,7 @@ pub mod dom_mod {
         let parent = parent_result.unwrap();
 
         let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
-            &root_component.vdom,
+            &root_component.get_vdom(),
             IfExprState::NotReached,
             root_component,
         );
@@ -326,8 +329,12 @@ pub mod dom_mod {
             return Ok(());
         }
 
-        let construct_dom_result =
-            construct_dom(&root_component.vdom, root_component, &parent, &document);
+        let construct_dom_result = construct_dom(
+            &root_component.get_vdom(),
+            root_component,
+            &parent,
+            &document,
+        );
         if construct_dom_result.is_err() {
             let msg = construct_dom_result.unwrap_err();
             match msg {

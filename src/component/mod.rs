@@ -26,8 +26,7 @@ pub mod component_mod {
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
-        #[wasm_bindgen(skip)] // todo: write a getter for this and remove the pub keyword + macro
-        pub vdom: Box<VirtualNode>,
+        vdom: Box<VirtualNode>,
     }
 
     const NO_VALUE: &str = "undefined";
@@ -42,6 +41,14 @@ pub mod component_mod {
                 component_did_mount: self.component_did_mount.clone(),
                 vdom: Box::from(self.vdom.deref().to_owned()),
             }
+        }
+    }
+
+    // TODO: refactor as much clone() call you can with lifetime parameters.
+
+    impl Component {
+        pub fn get_vdom<'a>(&'a self) -> &'a Box<VirtualNode> {
+            return &self.vdom;
         }
     }
 

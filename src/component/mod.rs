@@ -18,7 +18,7 @@ pub mod component_mod {
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
     };
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Debug)]
     #[wasm_bindgen]
     pub struct Component {
         state: Value,
@@ -26,7 +26,7 @@ pub mod component_mod {
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
-        #[wasm_bindgen(skip)]
+        #[wasm_bindgen(skip)] // todo: write a getter for this and remove the pub keyword + macro
         pub vdom: Box<VirtualNode>,
     }
 

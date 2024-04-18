@@ -11,38 +11,18 @@ pub mod parser_mod {
     use wasm_bindgen_futures::JsFuture;
     use web_sys::js_sys::Promise;
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub enum NodeType {
         Component(Component), //component object
         Tag(String),          // tag name
         Text(String),         // text content
     }
 
-    impl Clone for NodeType {
-        fn clone(&self) -> Self {
-            match self {
-                Self::Component(component) => Self::Component(component.clone()),
-                Self::Tag(tag) => Self::Tag(tag.clone()),
-                Self::Text(text) => Self::Text(text.clone()),
-            }
-        }
-    }
-
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct VirtualNode {
         pub node_type: NodeType,
         pub attributes: HashMap<String, String>,
         pub children: Vec<VirtualNode>,
-    }
-
-    impl Clone for VirtualNode {
-        fn clone(&self) -> Self {
-            Self {
-                attributes: self.attributes.clone(),
-                children: self.children.clone(),
-                node_type: self.node_type.clone(),
-            }
-        }
     }
 
     // This path should be kept in sync with where the specified file actually resides.

@@ -11,38 +11,18 @@ pub mod parser_mod {
     use wasm_bindgen_futures::JsFuture;
     use web_sys::js_sys::Promise;
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub enum NodeType {
         Component(Component), //component object
         Tag(String),          // tag name
         Text(String),         // text content
     }
 
-    impl Clone for NodeType {
-        fn clone(&self) -> Self {
-            match self {
-                Self::Component(component) => Self::Component(component.clone()),
-                Self::Tag(tag) => Self::Tag(tag.clone()),
-                Self::Text(text) => Self::Text(text.clone()),
-            }
-        }
-    }
-
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct VirtualNode {
         pub node_type: NodeType,
         pub attributes: HashMap<String, String>,
         pub children: Vec<VirtualNode>,
-    }
-
-    impl Clone for VirtualNode {
-        fn clone(&self) -> Self {
-            Self {
-                attributes: self.attributes.clone(),
-                children: self.children.clone(),
-                node_type: self.node_type.clone(),
-            }
-        }
     }
 
     // This path should be kept in sync with where the specified file actually resides.
@@ -90,6 +70,22 @@ pub mod parser_mod {
         return Err(CustomError::ParsingError(msg));
     }
 
+    /// This is a hack to remove extra chars that wrap literal values;
+    /// if value in prop is not a literal, it is returned unmodified.
+    // fn custom_trim(value: &String) -> String {
+    //     let trimmed_value = value.trim();
+    //     if value.starts_with("{") && value.ends_with("}") {
+    //         let value = &trimmed_value[1..trimmed_value.len() - 1]; // dive: why does this expression resolve to
+    //                                                                 //  a value of type str instead of &str if & was removed
+    //         let trimmed_value = value.trim();
+    //         if value.starts_with("\"") && value.ends_with("\"") {
+    //             let value = &trimmed_value[1..trimmed_value.len() - 1];
+    //             return value.to_owned();
+    //         }
+    //     }
+    //     return value.to_owned();
+    // }
+
     /// Given an object of type `ParsedPresenter`, constructs a vdom using the `tokenizer` module.
     /// If an error is encountered, an `Err` variant is returned explaining why; `Ok` otherwise,
     /// which contains a `VirtualNode` object.
@@ -102,14 +98,14 @@ pub mod parser_mod {
         let mut stack_size: usize = 0;
         let mut vdom: Vec<VirtualNode> = Vec::new();
         loop {
-            let CurrentState { state, token } = get_next_token();
+            let next_token_result = get_next_token();
+            if next_token_result.is_err() {
+                return Err(next_token_result.unwrap_err());
+            }
+            let CurrentState { state, token } = next_token_result.unwrap();
             match state {
                 TokenizerState::Finalized => {
                     return get_parser_return_value(stack);
-                }
-                TokenizerState::Error(err) => {
-                    let err = format!("[ERROR] {err}");
-                    return Err(CustomError::ParsingError(err));
                 }
                 TokenizerState::TagNameClose => {
                     let completed_node = stack.pop().unwrap();
@@ -173,10 +169,11 @@ pub mod parser_mod {
                 TokenizerState::Props => {
                     let owner_node = stack.get_mut(stack_size - 1).unwrap();
                     let attrs = &mut owner_node.attributes;
-                    let mut key_value_split = token.split('=');
-                    let key = key_value_split.next().unwrap().to_owned();
-                    let value = key_value_split.next().unwrap().to_owned();
-                    attrs.insert(key, value);
+                    let key_value_split = token.split_once("=").unwrap();
+                    // let key = key_value_split.next().unwrap().to_owned();
+                    // let value = key_value_split.next().unwrap().to_owned();
+                    // let value = custom_trim(&value);
+                    attrs.insert(key_value_split.0.to_owned(), key_value_split.1.to_owned());
                 }
                 TokenizerState::SelfClosingAngleBracket => {
                     let completed_node = stack.pop().unwrap();

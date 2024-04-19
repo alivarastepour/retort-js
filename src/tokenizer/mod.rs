@@ -11,7 +11,7 @@ pub mod tokenizer_mod {
     const OPEN_CURLY_BRACKET: &str = "{";
     const CLOSE_CURLY_BRACKET: &str = "}";
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum TokenizerState {
         Uninitialized,
         OpenAngleBracket,        // <
@@ -32,30 +32,12 @@ pub mod tokenizer_mod {
         pub token: String,
     }
 
-    impl Clone for TokenizerState {
-        fn clone(&self) -> Self {
-            match self {
-                Self::Uninitialized => Self::Uninitialized,
-                Self::OpenAngleBracket => Self::OpenAngleBracket,
-                Self::SelfClosingAngleBracket => Self::SelfClosingAngleBracket,
-                Self::ClosingAngleBracket => Self::ClosingAngleBracket,
-                Self::CloseAngleBracket => Self::CloseAngleBracket,
-                Self::TagNameOpen => Self::TagNameOpen,
-                Self::TagNameClose => Self::TagNameClose,
-                Self::Props => Self::Props,
-                Self::Text => Self::Text,
-                Self::Finalized => Self::Finalized,
-                Self::Component => Self::Component,
-            }
-        }
-    }
-
     /// Determines the type of token after encountering a `<` char at uninitialized state, as it can be
     /// a ClosingTag, an OpenAngleBracket or a Text variant. `Ok` variant is returned containing the `CurrentState`
     /// if nothing goes wrong, `Err` variant explaining why otherwise.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which is returned in the `token` field.
-    pub fn get_state_after_open_angle_bracket(
+    fn get_state_after_open_angle_bracket(
         text: String,
         index: &mut usize,
         markup: &Vec<char>,
@@ -100,7 +82,7 @@ pub mod tokenizer_mod {
     /// `Err` variant explaining why otherwise.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which is returned in the `token` field.
-    pub fn proceed_from_uninitialized(
+    fn proceed_from_uninitialized(
         markup: &Vec<char>,
         index: &mut usize,
     ) -> Result<CurrentState, Error> {
@@ -145,7 +127,7 @@ pub mod tokenizer_mod {
 
     /// Advances `index` till it reaches the first char that doesn't match with `\s`(any whitespace char).
     /// It will update the `index` mutable reference.
-    pub fn update_starting_tag_index(index: &mut usize, max: usize, markup: &Vec<char>) {
+    fn update_starting_tag_index(index: &mut usize, max: usize, markup: &Vec<char>) {
         loop {
             if *index == max {
                 break;
@@ -161,7 +143,7 @@ pub mod tokenizer_mod {
 
     /// Advances `index` to the end of tag name. It will update mutable references of both `index` and
     /// `tag_name`
-    pub fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
+    fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
         loop {
             let mut current = markup[*index].to_string();
             current = current.trim().to_owned();
@@ -178,7 +160,7 @@ pub mod tokenizer_mod {
     /// Determines the type of token after tag's name is built.
     /// `Ok` variant is returned containing the `CurrentState` if nothing goes wrong,
     /// `Err` variant explaining why otherwise.
-    pub fn get_state_after_tag_name(
+    fn get_state_after_tag_name(
         tag_name: String,
         caller: TokenizerState,
     ) -> Result<CurrentState, Error> {
@@ -230,7 +212,7 @@ pub mod tokenizer_mod {
     /// tokenized char, which is returned in the `token` field.
     /// `Ok` variant is returned containing the `CurrentState` if nothing goes wrong,
     /// `Err` variant explaining why otherwise.
-    pub fn proceed_from_open_angle_bracket(
+    fn proceed_from_open_angle_bracket(
         markup: &Vec<char>,
         index: &mut usize,
         caller: TokenizerState,
@@ -253,7 +235,7 @@ pub mod tokenizer_mod {
     /// or attributes like `alt={"This is an image"}`.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which in this context, is supposed to be PROP_KEY_VALUE_SEPARATOR.
-    pub fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
+    fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
         let max = markup.len();
         let mut key = String::from("");
         loop {
@@ -278,7 +260,7 @@ pub mod tokenizer_mod {
     /// returned in case of errors.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which in this context, is supposed to be CLOSE_CURLY_BRACKET.
-    pub fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> Result<String, Error> {
+    fn read_value_of_prop(index: &mut usize, markup: &Vec<char>) -> Result<String, Error> {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
 
@@ -319,7 +301,7 @@ pub mod tokenizer_mod {
     /// Determines if the encountered `/` char is valid or not.
     /// `Ok` variant is returned containing the `CurrentState` if nothing goes wrong,
     /// `Err` variant explaining why otherwise.
-    pub fn get_state_after_slash(
+    fn get_state_after_slash(
         index: &mut usize,
         markup: &Vec<char>,
         max: usize,
@@ -345,10 +327,7 @@ pub mod tokenizer_mod {
 
     /// Returns an `Ok` including pair of props if its format is correct, `Err` otherwise.
     /// Currently, the acceptable prop format is `key={"value"}`, `key={'value'}` and `key={js expression}`
-    pub fn get_state_from_props(
-        index: &mut usize,
-        markup: &Vec<char>,
-    ) -> Result<CurrentState, Error> {
+    fn get_state_from_props(index: &mut usize, markup: &Vec<char>) -> Result<CurrentState, Error> {
         let key = read_key_of_prop(index, markup);
         *index += 1; // This is for PROP_KEY_VALUE_SEPARATOR
         let value_result = read_value_of_prop(index, markup);
@@ -380,7 +359,7 @@ pub mod tokenizer_mod {
     /// tokenized char, which is returned in the `token` field.
     /// `Ok` variant is returned containing the `CurrentState` if nothing goes wrong,
     /// `Err` variant explaining why otherwise.
-    pub fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> Result<CurrentState, Error> {
+    fn proceed_from_name(markup: &Vec<char>, index: &mut usize) -> Result<CurrentState, Error> {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
         if markup[*index] == '>' {

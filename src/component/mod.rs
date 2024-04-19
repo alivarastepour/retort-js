@@ -21,7 +21,7 @@ pub mod component_mod {
     #[derive(Serialize, Deserialize, Debug)]
     #[wasm_bindgen]
     pub struct Component {
-        state: Value,
+        state: String,
         presenter: String,
         props: String,
         #[serde(with = "serde_wasm_bindgen::preserve")]
@@ -50,6 +50,14 @@ pub mod component_mod {
         pub fn get_vdom<'a>(&'a self) -> &'a Box<VirtualNode> {
             return &self.vdom;
         }
+
+        pub fn get_state<'a>(&'a self) -> &'a String {
+            return &self.state;
+        }
+
+        pub fn get_props<'a>(&'a self) -> &'a String {
+            return &self.props;
+        }
     }
 
     #[wasm_bindgen]
@@ -60,17 +68,17 @@ pub mod component_mod {
             presenter: String,
             component_did_mount: &Function,
         ) -> Component {
-            let state: Result<Value, Error> = from_str(&state);
-            if let Result::Err(err) = state {
-                panic!("could not convert it: {err}");
-            }
+            // let state: Result<Value, Error> = from_str(&state);
+            // if let Result::Err(err) = state {
+            //     panic!("could not convert it: {err}");
+            // }
             let virtual_node_result: Result<VirtualNode, CustomError> =
                 Self::create_component_vdom(presenter.clone()).await;
             if let Result::Err(err) = virtual_node_result {
                 panic!("");
             }
             Component {
-                state: state.unwrap(),
+                state,
                 presenter,
                 props: "{}".to_owned(),
                 component_did_mount: component_did_mount.clone(),
@@ -104,29 +112,29 @@ pub mod component_mod {
             to_string(&self.state).unwrap()
         }
 
-        #[wasm_bindgen(setter)]
-        pub fn set_state(&mut self, state: String) {
-            // TODO: generalize this repeated code
-            let deserialized_state: Result<Value, Error> = from_str(&state);
-            if let Result::Err(err) = deserialized_state {
-                panic!("could not convert it: {err}");
-            }
-            self.state = deserialized_state.unwrap();
-        }
+        // #[wasm_bindgen(setter)]
+        // pub fn set_state(&mut self, state: String) {
+        //     // TODO: generalize this repeated code
+        //     let deserialized_state: Result<Value, Error> = from_str(&state);
+        //     if let Result::Err(err) = deserialized_state {
+        //         panic!("could not convert it: {err}");
+        //     }
+        //     self.state = deserialized_state.unwrap();
+        // }
 
         /*
          note the importance of &mut self parameter. although it sounds implicit, removing it will
         forbid you to use it in Javascript.
         */
-        #[wasm_bindgen]
-        pub fn set_state_wrapper(&mut self, state: String) {
-            let deserialized_state: Result<Value, Error> = from_str(&state);
-            if let Result::Err(err) = deserialized_state {
-                panic!("could not convert it: {err}");
-            }
-            let new_state = deserialized_state.unwrap();
-            self.state = new_state;
-        }
+        // #[wasm_bindgen]
+        // pub fn set_state_wrapper(&mut self, state: String) {
+        //     let deserialized_state: Result<Value, Error> = from_str(&state);
+        //     if let Result::Err(err) = deserialized_state {
+        //         panic!("could not convert it: {err}");
+        //     }
+        //     let new_state = deserialized_state.unwrap();
+        //     self.state = new_state;
+        // }
 
         #[wasm_bindgen(getter)]
         pub fn props(&self) -> String {

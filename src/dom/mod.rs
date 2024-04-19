@@ -8,7 +8,7 @@ pub mod dom_mod {
     use crate::{
         component::component_mod::Component,
         error::error_mod::Error,
-        evaluator::evaluator_mod::evaluate_value_to_raw_string,
+        evaluator::evaluator_mod::{evaluate_expression_and_string, evaluate_value_to_raw_string},
         parser::parser_mod::{NodeType, VirtualNode},
     };
 
@@ -174,7 +174,18 @@ pub mod dom_mod {
 
     /// Crates a text node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
-    fn construct_text(text: &String, parent: &Element) -> Result<(), Error> {
+    fn construct_text(
+        text: &String,
+        parent: &Element,
+        current_component: &Component,
+    ) -> Result<(), Error> {
+        // TODO: every `text` doesn't need to be evaluated as expression. This introduces considerable overhead.
+        let evaluated_text_result =
+            evaluate_expression_and_string(text.to_owned(), current_component);
+        if evaluated_text_result.is_err() {
+            return Err(evaluated_text_result.unwrap_err());
+        }
+        let text = evaluated_text_result.unwrap();
         let text_element_result = Text::new_with_data(&text);
         if text_element_result.is_err() {
             return Err(Error::DomError(text_element_result.unwrap_err()));
@@ -295,7 +306,7 @@ pub mod dom_mod {
                 );
             }
             NodeType::Text(text) => {
-                res = construct_text(text, parent);
+                res = construct_text(text, parent, current_component);
             }
         }
         return res;
@@ -355,6 +366,16 @@ pub mod dom_mod {
                     let a = to_value(&err).unwrap();
                     log_1(&a);
                 }
+                Error::ReferenceError(err) => {
+                    let a = to_value(&err).unwrap();
+                    log_1(&a);
+                }
+                Error::SerdeWasmBindgenError(err) => {
+                    let a = err.to_string();
+                    let a = to_value(&a).unwrap();
+                    log_1(&a);
+                }
+
                 _ => {
                     log_1(&JsValue::from_str("err"));
                 }
@@ -363,3 +384,8 @@ pub mod dom_mod {
         Ok(())
     }
 }
+
+// rendering list of data:
+// render-for is used as a special attribute to mark the "wrapper" of rendered list.
+// render-for syntax is sth like this: render-for={"varName of state.someList"}
+// this way, `varName` becomes a value which is available in the entire subtree of the "wrapper".

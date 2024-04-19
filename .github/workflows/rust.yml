@@ -19,6 +19,6 @@ jobs:
       with:
         version: 'latest'
     - name: Build
-      run: wasm-pack build --target
+      run: wasm-pack build --target web
     - name: Run tests
       run: cargo test --verbose

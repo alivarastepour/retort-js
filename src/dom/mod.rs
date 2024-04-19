@@ -8,7 +8,10 @@ pub mod dom_mod {
     use crate::{
         component::component_mod::Component,
         error::error_mod::Error,
-        evaluator::evaluator_mod::{evaluate_expression_and_string, evaluate_value_to_raw_string},
+        evaluator::evaluator_mod::{
+            evaluate_expression_and_string, evaluate_value_to_raw_string,
+            has_valid_expression_inside,
+        },
         parser::parser_mod::{NodeType, VirtualNode},
     };
 
@@ -172,6 +175,15 @@ pub mod dom_mod {
         return add_children(children, current_component, &new_element, document);
     }
 
+    fn get_text(text: &String, current_component: &Component) -> Result<String, Error> {
+        let has_valid_exp = has_valid_expression_inside(text.to_owned());
+        if has_valid_exp {
+            return evaluate_expression_and_string(text.to_owned(), current_component);
+        } else {
+            return Ok(text.to_owned());
+        }
+    }
+
     /// Crates a text node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
     fn construct_text(
@@ -179,9 +191,7 @@ pub mod dom_mod {
         parent: &Element,
         current_component: &Component,
     ) -> Result<(), Error> {
-        // TODO: every `text` doesn't need to be evaluated as expression. This introduces considerable overhead.
-        let evaluated_text_result =
-            evaluate_expression_and_string(text.to_owned(), current_component);
+        let evaluated_text_result = get_text(text, current_component);
         if evaluated_text_result.is_err() {
             return Err(evaluated_text_result.unwrap_err());
         }

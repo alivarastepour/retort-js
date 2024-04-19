@@ -224,7 +224,7 @@ pub mod evaluator_mod {
 
     /// performs a look ahead search on the validity of JS expression.
     /// KNOWN ISSUE: this doesn't account for curly brackets in strings.
-    fn has_valid_expression_inside(text: String) -> bool {
+    pub fn has_valid_expression_inside(text: String) -> bool {
         let open_c = text.matches("{").count();
         let close_c = text.matches("}").count();
         return open_c == close_c;

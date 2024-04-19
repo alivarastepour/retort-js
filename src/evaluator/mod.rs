@@ -13,7 +13,8 @@ pub mod evaluator_mod {
     /// In JSON strings which contain arrays, `stringify` method is called twice
     /// when converting. Since we need to call the `parse` as many times as we have called the `stringify`,
     /// we must check whether the type of state is `object` or not after the first call to `parse`.
-    const CLOSURE: &str = "let state=JSON.parse(state_);if(typeof state === 'string'){console.log(\"DONE\");state=JSON.parse(state)}";
+    const CLOSURE: &str =
+        "let state=JSON.parse(state_);if(typeof state === 'string'){state=JSON.parse(state)}";
     const RETURN: &str = "return ";
 
     #[derive(Debug)]

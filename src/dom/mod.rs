@@ -8,7 +8,9 @@ pub mod dom_mod {
     use crate::{
         component::component_mod::Component,
         error::error_mod::Error,
-        evaluator::evaluator_mod::{evaluate_expression_and_string, evaluate_value_to_raw_string},
+        evaluator::evaluator_mod::{
+            evaluate_attribute_value_to_raw_string, evaluate_text_value_to_raw_string,
+        },
         parser::parser_mod::{NodeType, VirtualNode},
     };
 
@@ -88,7 +90,7 @@ pub mod dom_mod {
     ) -> Result<(), Error> {
         for (key, value) in attributes {
             let attr_value_result =
-                evaluate_value_to_raw_string(value.to_owned(), current_component);
+                evaluate_attribute_value_to_raw_string(value.to_owned(), current_component);
             if attr_value_result.is_err() {
                 return Err(attr_value_result.unwrap_err());
             }
@@ -179,9 +181,7 @@ pub mod dom_mod {
         parent: &Element,
         current_component: &Component,
     ) -> Result<(), Error> {
-        // TODO: every `text` doesn't need to be evaluated as expression. This introduces considerable overhead.
-        let evaluated_text_result =
-            evaluate_expression_and_string(text.to_owned(), current_component);
+        let evaluated_text_result = evaluate_text_value_to_raw_string(text, current_component);
         if evaluated_text_result.is_err() {
             return Err(evaluated_text_result.unwrap_err());
         }
@@ -216,7 +216,7 @@ pub mod dom_mod {
         if if_.is_some() {
             let if_value = if_.unwrap();
             let evaluated_if_value_result =
-                evaluate_value_to_raw_string(if_value.to_owned(), current_component);
+                evaluate_attribute_value_to_raw_string(if_value.to_owned(), current_component);
             if evaluated_if_value_result.is_ok() {
                 let evaluated_if_value: String = evaluated_if_value_result.unwrap();
                 let res = evaluated_if_value == "true";
@@ -244,7 +244,7 @@ pub mod dom_mod {
             }
             let else_if_value = else_if.unwrap();
             let evaluated_else_if_value_result =
-                evaluate_value_to_raw_string(else_if_value.to_owned(), current_component);
+                evaluate_attribute_value_to_raw_string(else_if_value.to_owned(), current_component);
             if evaluated_else_if_value_result.is_ok() {
                 let evaluated_else_if_value = evaluated_else_if_value_result.unwrap();
                 let res = evaluated_else_if_value == "true";

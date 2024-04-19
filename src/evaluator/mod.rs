@@ -1,21 +1,12 @@
+mod js_evaluator;
+mod util;
 pub mod evaluator_mod {
-
+    use super::js_evaluator::js_evaluator::get_state_props_evaluator;
+    use super::util::evaluator_util::*;
     use serde_wasm_bindgen::{from_value, to_value};
-    use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::js_sys::Function;
+    use wasm_bindgen::JsValue;
 
     use crate::{component::component_mod::Component, error::error_mod::Error};
-
-    const USE_STRICT: &str = "\"use strict\";";
-    const STATE_PARAMETER: &str = "state_";
-    const PROPS_PARAMETER: &str = "props_";
-
-    /// In JSON strings which contain arrays, `stringify` method is called twice
-    /// when converting. Since we need to call the `parse` as many times as we have called the `stringify`,
-    /// we must check whether the type of state is `object` or not after the first call to `parse`.
-    const CLOSURE: &str =
-        "let state=JSON.parse(state_);if(typeof state === 'string'){state=JSON.parse(state)}";
-    const RETURN: &str = "return ";
 
     #[derive(Debug)]
     pub enum AttributeTextVariant {
@@ -23,42 +14,12 @@ pub mod evaluator_mod {
         String,
         Number,
         Expression,
-        ExpressionAndString,
-    }
-
-    #[derive(Debug, Clone)]
-    pub enum NonDeterminedTagContentTextVariant {
-        Value(String),
-        Expression(String),
-    }
-    pub enum DeterminedTagContentTextVariant {
-        Value(String),
-        ExpressionNoTag(String),
-        ExpressionWithTag(String),
     }
 
     #[derive(Debug)]
     pub struct TextInfo<T> {
         pub variant: T,
         pub value: String,
-    }
-
-    /// This block interfaces `window.Function` constructor to the rust environment.
-    #[wasm_bindgen(js_namespace=window)]
-    extern "C" {
-        fn Function(arg1: String, arg2: String, function_string: String) -> Function;
-    }
-
-    /// Evaluates the result of `function_string` in a JS context using the `window.Function`
-    /// constructor. Current component's state and props are the only values in the created
-    /// anonymous function's closure.
-    fn get_state_props_evaluator(function_string: String) -> Function {
-        let function_body = USE_STRICT.to_owned() + CLOSURE + RETURN + &function_string;
-        Function(
-            STATE_PARAMETER.to_owned(),
-            PROPS_PARAMETER.to_owned(),
-            function_body,
-        )
     }
 
     /// Given a `JsValue` which is the result of evaluating some expression via the `window.Function`
@@ -88,7 +49,7 @@ pub mod evaluator_mod {
     /// Given a JS expression and context of the component which it was used in, returns a raw String
     /// which is the evaluated result of the expression. In case of error, an `Err` variant is returned
     /// which contains the reason.
-    pub fn evaluate_expression(
+    fn evaluate_expression(
         expression: String,
         current_component: &Component,
     ) -> Result<String, Error> {
@@ -132,56 +93,10 @@ pub mod evaluator_mod {
         Ok(evaluated_expression_string_result.unwrap())
     }
 
-    fn extract_expression_and_string(
-        string_with_expression: String,
-    ) -> Result<Vec<NonDeterminedTagContentTextVariant>, Error> {
-        let string_with_expression_chars: Vec<char> = string_with_expression.chars().collect();
-        let mut result: Vec<NonDeterminedTagContentTextVariant> = Vec::new();
-        let mut expression_stack = Vec::new();
-        let mut current_expression: String = String::new();
-        let mut current_string: String = String::new();
-        for chr in string_with_expression_chars {
-            if chr == '{' {
-                expression_stack.push('{');
-                if !current_string.is_empty() {
-                    result.push(NonDeterminedTagContentTextVariant::Value(
-                        current_string.clone(),
-                    ));
-                }
-                current_string.clear();
-                current_expression += "{";
-            } else if chr == '}' {
-                let head = expression_stack.pop();
-                if head.is_none() {
-                    return Err(Error::ParsingError(format!("There was an error while parsing the following expression: {string_with_expression}. You have probably messed up some curly brackets.")));
-                }
-                current_expression += &chr.to_string();
-                if expression_stack.is_empty() {
-                    result.push(NonDeterminedTagContentTextVariant::Expression(
-                        current_expression.clone(),
-                    ));
-                    current_expression.clear();
-                }
-            } else {
-                if expression_stack.is_empty() {
-                    current_string += &chr.to_string();
-                } else {
-                    current_expression += &chr.to_string();
-                }
-            }
-        }
-        if !current_string.is_empty() {
-            result.push(NonDeterminedTagContentTextVariant::Value(
-                current_string.clone(),
-            ));
-        }
-        Ok(result)
-    }
-
     /// Given a String which contains a mix of JS expressions and strings plus the context of the component
     /// which it was used in, returns a raw String which is the evaluated result of the expression.
     /// In case of error, an `Err` variant is returned which contains the reason.
-    pub fn evaluate_expression_and_string(
+    fn evaluate_expression_and_string(
         string_with_expression: String,
         current_component: &Component,
     ) -> Result<String, Error> {
@@ -222,41 +137,10 @@ pub mod evaluator_mod {
         Ok(result)
     }
 
-    /// performs a look ahead search on the validity of JS expression.
-    /// KNOWN ISSUE: this doesn't account for curly brackets in strings.
-    fn has_valid_expression_inside(text: String) -> bool {
-        let open_c = text.matches("{").count();
-        let close_c = text.matches("}").count();
-        return open_c == close_c;
-    }
-
-    /// Performs a check on the wrapper chars of value of the attributes'.
-    fn is_a_valid_attribute_value(text: &str) -> bool {
-        text.starts_with("{") && text.ends_with("}")
-    }
-
-    /// Returns true if `text` is convertible to number.
-    fn attribute_value_is_number(text: &str) -> bool {
-        text.parse::<i64>().is_ok()
-    }
-
-    /// Returns true if `text` is convertible to bool.
-    fn attribute_value_is_bool(text: &str) -> bool {
-        text.parse::<bool>().is_ok()
-    }
-
-    /// Returns true if `text` is wrapped inside quotation marks.
-    fn attribute_value_is_wrapped_in_quotes(text: &str) -> bool {
-        (text.starts_with("\"") && text.ends_with("\""))
-            || (text.starts_with("'") && text.ends_with("'"))
-    }
-
     /// determines how should a value in attribute be treated. Returns an `Ok` variant which contains
     /// the value and its type; or `Err` variant with explanation if `text` does not follow the defined
     /// attributes's value pattern.
-    pub fn get_attribute_text_variant(
-        text: String,
-    ) -> Result<TextInfo<AttributeTextVariant>, Error> {
+    fn get_attribute_text_variant(text: String) -> Result<TextInfo<AttributeTextVariant>, Error> {
         let text_trimmed = text.trim();
         if is_a_valid_attribute_value(text_trimmed) {
             let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
@@ -273,7 +157,7 @@ pub mod evaluator_mod {
                 let inside_quotes_has_valid_expression =
                     has_valid_expression_inside(inside_quotes.to_owned());
                 if inside_quotes_has_valid_expression {
-                    variant = AttributeTextVariant::ExpressionAndString;
+                    variant = AttributeTextVariant::Expression;
                     value = inside_quotes;
                 } else {
                     variant = AttributeTextVariant::String;
@@ -281,7 +165,7 @@ pub mod evaluator_mod {
                 }
             } else {
                 variant = AttributeTextVariant::Expression;
-                value = inside_bracket;
+                value = text_trimmed;
             }
             let text_info = TextInfo {
                 value: value.to_string(),
@@ -294,10 +178,8 @@ pub mod evaluator_mod {
         )));
     }
 
-    /// Evaluates the given value in the context of provided component.
-    /// OBSERVE: can this be reused for other evaluations too? currently, only attribution evaluation
-    /// uses this.
-    pub fn evaluate_value_to_raw_string(
+    /// Evaluates the given attribute value in the context of provided component.
+    pub fn evaluate_attribute_value_to_raw_string(
         value: String,
         current_component: &Component,
     ) -> Result<String, Error> {
@@ -309,13 +191,6 @@ pub mod evaluator_mod {
         let attr_value;
         match variant {
             AttributeTextVariant::Expression => {
-                let attr_value_result = evaluate_expression(value, current_component);
-                if attr_value_result.is_err() {
-                    return Err(attr_value_result.unwrap_err());
-                }
-                attr_value = attr_value_result.unwrap();
-            }
-            AttributeTextVariant::ExpressionAndString => {
                 let attr_value_result = evaluate_expression_and_string(value, current_component);
                 if attr_value_result.is_err() {
                     return Err(attr_value_result.unwrap_err());
@@ -330,23 +205,93 @@ pub mod evaluator_mod {
         Ok(attr_value)
     }
 
-    fn get_tag_content_variant(text: String) -> Result<(), Error> {
-        let collected_expression_and_string_result = extract_expression_and_string(text);
-        if collected_expression_and_string_result.is_err() {
-            return Err(collected_expression_and_string_result.unwrap_err());
+    /// Evaluates the given text value in the context of provided component.
+    pub fn evaluate_text_value_to_raw_string(
+        text: &String,
+        current_component: &Component,
+    ) -> Result<String, Error> {
+        let has_valid_exp = has_valid_expression_inside(text.to_owned());
+        if has_valid_exp {
+            return evaluate_expression_and_string(text.to_owned(), current_component);
+        } else {
+            return Ok(text.to_owned());
         }
-        let mut result: Vec<DeterminedTagContentTextVariant> = Vec::new();
-        let collected_expression_and_string = collected_expression_and_string_result.unwrap();
-        for value in collected_expression_and_string {
-            match value {
-                NonDeterminedTagContentTextVariant::Expression(exp) => {}
-                NonDeterminedTagContentTextVariant::Value(val) => {
-                    result.push(DeterminedTagContentTextVariant::Value(val))
-                }
-            }
-        }
-        Ok(())
     }
+
+    // fn get_tag_content_variant(text: String) -> Result<(), Error> {
+    //     let collected_expression_and_string_result = extract_expression_and_string(text);
+    //     if collected_expression_and_string_result.is_err() {
+    //         return Err(collected_expression_and_string_result.unwrap_err());
+    //     }
+    //     let mut result: Vec<DeterminedTagContentTextVariant> = Vec::new();
+    //     let collected_expression_and_string = collected_expression_and_string_result.unwrap();
+    //     for value in collected_expression_and_string {
+    //         match value {
+    //             NonDeterminedTagContentTextVariant::Expression(exp) => {}
+    //             NonDeterminedTagContentTextVariant::Value(val) => {
+    //                 result.push(DeterminedTagContentTextVariant::Value(val))
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
+
+    // fn extract_expression_and_string(
+    //     string_with_expression: String,
+    // ) -> Result<Vec<NonDeterminedTagContentTextVariant>, Error> {
+    //     let string_with_expression_chars: Vec<char> = string_with_expression.chars().collect();
+    //     let mut result: Vec<NonDeterminedTagContentTextVariant> = Vec::new();
+    //     let mut expression_stack = Vec::new();
+    //     let mut current_expression: String = String::new();
+    //     let mut current_string: String = String::new();
+    //     for chr in string_with_expression_chars {
+    //         if chr == '{' {
+    //             expression_stack.push('{');
+    //             if !current_string.is_empty() {
+    //                 result.push(NonDeterminedTagContentTextVariant::Value(
+    //                     current_string.clone(),
+    //                 ));
+    //             }
+    //             current_string.clear();
+    //             current_expression += "{";
+    //         } else if chr == '}' {
+    //             let head = expression_stack.pop();
+    //             if head.is_none() {
+    //                 return Err(Error::ParsingError(format!("There was an error while parsing the following expression: {string_with_expression}. You have probably messed up some curly brackets.")));
+    //             }
+    //             current_expression += &chr.to_string();
+    //             if expression_stack.is_empty() {
+    //                 result.push(NonDeterminedTagContentTextVariant::Expression(
+    //                     current_expression.clone(),
+    //                 ));
+    //                 current_expression.clear();
+    //             }
+    //         } else {
+    //             if expression_stack.is_empty() {
+    //                 current_string += &chr.to_string();
+    //             } else {
+    //                 current_expression += &chr.to_string();
+    //             }
+    //         }
+    //     }
+    //     if !current_string.is_empty() {
+    //         result.push(NonDeterminedTagContentTextVariant::Value(
+    //             current_string.clone(),
+    //         ));
+    //     }
+    //     Ok(result)
+    // }
+
+    // #[derive(Debug, Clone)]
+    // pub enum NonDeterminedTagContentTextVariant {
+    //     Value(String),
+    //     Expression(String),
+    // }
+    // pub enum DeterminedTagContentTextVariant {
+    //     Value(String),
+    //     ExpressionNoTag(String),
+    //     ExpressionWithTag(String),
+    // }
 
     // tokenizer/parser
     //                                    what expression are commonly used within the context of jsx?

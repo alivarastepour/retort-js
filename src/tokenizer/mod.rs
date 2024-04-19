@@ -571,4 +571,126 @@ pub mod tokenizer_mod {
 
         next
     }
+    #[cfg(test)]
+    mod tests {
+        use crate::tokenizer::tokenizer_mod::{
+            proceed_from_uninitialized, CurrentState, TokenizerState,
+        };
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
+        /// An empty markup, which is any markup that has no char other than whitespace, should
+        /// make tokenization state to `Finalized`.
+        fn test_empty_markup() {
+            let markup: Vec<char> = "          \n   \t  \n".chars().collect();
+            let mut index = 0usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Finalized => {
+                    assert!(token == "" && index == markup.len() - 1)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/5"]
+        fn test_text_markup() {
+            let markup_string = "This is a plain test";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 0usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Finalized => {
+                    assert!(token == markup_string && index == markup.len() - 1)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// When at `CurrentState::Uninitialized` and the next non-whitespace char is an open angle
+        /// bracket, `CurrentState::OpenAngleBracket` must be the new state; index should be equal to
+        /// index of open angle bracket char.
+        fn test_open_angle_bracket() {
+            let markup_string = "    <div";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 0usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::OpenAngleBracket => {
+                    assert!(token == "<" && index == 4)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// When at `CurrentState::Uninitialized` and the next non-whitespace char is an open angle
+        /// bracket, `CurrentState::ClosingAngleBracket` must be the new state if there is a `/` char
+        /// regardless of non-whitespace chars after it; index should be equal to index of `/` char.
+        fn test_closing_angle_bracket() {
+            let markup_string = "<div>hi<   /  div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 7usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::ClosingAngleBracket => {
+                    assert!(token == "</" && index == 11)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// When at `CurrentState::CloseAngleBracket` and the next non-whitespace char is not an open angle
+        /// bracket, `CurrentState::Text` must be the new state; index should be equal to
+        /// index of text's last char.
+        fn test_text_inside_tag() {
+            let markup_string = "<div>hello world<div>hi</div></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Text => {
+                    assert!(token == "hello world" && index == 15)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/13"]
+        /// This can be removed when issue is resolved.
+        fn test_curly_brackets() {
+            let markup_string = "<div>}hi</div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Text => {
+                    assert!(token == "}hi" && index == 7)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+    }
 }

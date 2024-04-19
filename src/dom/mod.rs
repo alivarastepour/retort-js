@@ -9,8 +9,7 @@ pub mod dom_mod {
         component::component_mod::Component,
         error::error_mod::Error,
         evaluator::evaluator_mod::{
-            evaluate_expression_and_string, evaluate_value_to_raw_string,
-            has_valid_expression_inside,
+            evaluate_attribute_value_to_raw_string, evaluate_text_value_to_raw_string,
         },
         parser::parser_mod::{NodeType, VirtualNode},
     };
@@ -91,7 +90,7 @@ pub mod dom_mod {
     ) -> Result<(), Error> {
         for (key, value) in attributes {
             let attr_value_result =
-                evaluate_value_to_raw_string(value.to_owned(), current_component);
+                evaluate_attribute_value_to_raw_string(value.to_owned(), current_component);
             if attr_value_result.is_err() {
                 return Err(attr_value_result.unwrap_err());
             }
@@ -175,15 +174,6 @@ pub mod dom_mod {
         return add_children(children, current_component, &new_element, document);
     }
 
-    fn get_text(text: &String, current_component: &Component) -> Result<String, Error> {
-        let has_valid_exp = has_valid_expression_inside(text.to_owned());
-        if has_valid_exp {
-            return evaluate_expression_and_string(text.to_owned(), current_component);
-        } else {
-            return Ok(text.to_owned());
-        }
-    }
-
     /// Crates a text node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
     fn construct_text(
@@ -191,7 +181,7 @@ pub mod dom_mod {
         parent: &Element,
         current_component: &Component,
     ) -> Result<(), Error> {
-        let evaluated_text_result = get_text(text, current_component);
+        let evaluated_text_result = evaluate_text_value_to_raw_string(text, current_component);
         if evaluated_text_result.is_err() {
             return Err(evaluated_text_result.unwrap_err());
         }
@@ -226,7 +216,7 @@ pub mod dom_mod {
         if if_.is_some() {
             let if_value = if_.unwrap();
             let evaluated_if_value_result =
-                evaluate_value_to_raw_string(if_value.to_owned(), current_component);
+                evaluate_attribute_value_to_raw_string(if_value.to_owned(), current_component);
             if evaluated_if_value_result.is_ok() {
                 let evaluated_if_value: String = evaluated_if_value_result.unwrap();
                 let res = evaluated_if_value == "true";
@@ -254,7 +244,7 @@ pub mod dom_mod {
             }
             let else_if_value = else_if.unwrap();
             let evaluated_else_if_value_result =
-                evaluate_value_to_raw_string(else_if_value.to_owned(), current_component);
+                evaluate_attribute_value_to_raw_string(else_if_value.to_owned(), current_component);
             if evaluated_else_if_value_result.is_ok() {
                 let evaluated_else_if_value = evaluated_else_if_value_result.unwrap();
                 let res = evaluated_else_if_value == "true";

@@ -678,7 +678,7 @@ pub mod tokenizer_mod {
         #[ignore = "https://github.com/alivarastepour/retort-js/issues/13"]
         /// This can be removed when issue is resolved.
         fn test_curly_brackets() {
-            let markup_string = "<div>}hi</div>";
+            let markup_string = "<div>}hi</div> ";
             let markup: Vec<char> = markup_string.chars().collect();
             let mut index = 5usize;
             let CurrentState { state, token } =

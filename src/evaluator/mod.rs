@@ -1,6 +1,6 @@
 pub mod evaluator_mod {
 
-    use serde_wasm_bindgen::from_value;
+    use serde_wasm_bindgen::{from_value, to_value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::js_sys::Function;
 
@@ -9,7 +9,11 @@ pub mod evaluator_mod {
     const USE_STRICT: &str = "\"use strict\";";
     const STATE_PARAMETER: &str = "state_";
     const PROPS_PARAMETER: &str = "props_";
-    const CLOSURE: &str = "const state = JSON.parse(state_);const props = JSON.parse(props_);";
+
+    /// In JSON strings which contain arrays, `stringify` method is called twice
+    /// when converting. Since we need to call the `parse` as many times as we have called the `stringify`,
+    /// we must check whether the type of state is `object` or not after the first call to `parse`.
+    const CLOSURE: &str = "let state=JSON.parse(state_);if(typeof state === 'string'){console.log(\"DONE\");state=JSON.parse(state)}";
     const RETURN: &str = "return ";
 
     #[derive(Debug)]
@@ -88,10 +92,24 @@ pub mod evaluator_mod {
         current_component: &Component,
     ) -> Result<String, Error> {
         let evaluator = get_state_props_evaluator(expression.to_owned());
+        let converted_state_result = to_value(current_component.get_state());
+        if converted_state_result.is_err() {
+            return Err(Error::SerdeWasmBindgenError(
+                converted_state_result.unwrap_err(),
+            ));
+        }
+        let converted_prop_result = to_value(current_component.get_props());
+        if converted_prop_result.is_err() {
+            return Err(Error::SerdeWasmBindgenError(
+                converted_prop_result.unwrap_err(),
+            ));
+        }
+        let converted_prop = converted_prop_result.unwrap();
+        let converted_state = converted_state_result.unwrap();
         let expression_evaluation_result = evaluator.call2(
             &JsValue::undefined(), // not value for `this` is provided to the evaluator.
-            &JsValue::from_str(&current_component.state()),
-            &JsValue::from_str(&current_component.props()),
+            &converted_state,
+            &converted_prop,
         );
         if expression_evaluation_result.is_err() {
             let msg: Result<String, serde_wasm_bindgen::Error> =
@@ -311,8 +329,6 @@ pub mod evaluator_mod {
         Ok(attr_value)
     }
 
-    
-
     fn get_tag_content_variant(text: String) -> Result<(), Error> {
         let collected_expression_and_string_result = extract_expression_and_string(text);
         if collected_expression_and_string_result.is_err() {
@@ -322,9 +338,7 @@ pub mod evaluator_mod {
         let collected_expression_and_string = collected_expression_and_string_result.unwrap();
         for value in collected_expression_and_string {
             match value {
-                NonDeterminedTagContentTextVariant::Expression(exp) => {
-
-                }
+                NonDeterminedTagContentTextVariant::Expression(exp) => {}
                 NonDeterminedTagContentTextVariant::Value(val) => {
                     result.push(DeterminedTagContentTextVariant::Value(val))
                 }

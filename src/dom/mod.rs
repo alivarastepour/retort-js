@@ -170,8 +170,38 @@ pub mod dom_mod {
             return Err(Error::DomError(append_child_result.unwrap_err()));
         }
 
+        let has_render_for_attribute = current_root.attributes.get("render-for");
         let children = &current_root.children;
-        return add_children(children, current_component, &new_element, document);
+        if has_render_for_attribute.is_none() {
+            return add_children(children, current_component, &new_element, document);
+        } else {
+            let children_count = children.len();
+            if children_count != 1 {
+                let msg = format!("Wrapper elements with `render-for` attribute must contain one and only one child. {children_count} were found.");
+                return Err(Error::ParsingError(msg));
+            } else {
+                let for_statement = has_render_for_attribute.unwrap();
+                let for_statement_split: Vec<String> = for_statement
+                    .split_whitespace()
+                    .map(|x| x.to_owned())
+                    .collect();
+                let for_statement_split_len = for_statement_split.len();
+                if for_statement_split_len != 3 {
+                    let msg = format!("Invalid format for value of `render-for` attribute. Expected 3 tokens, {for_statement_split_len} were found.");
+                    return Err(Error::ParsingError(msg));
+                }
+                let in_ = &for_statement_split[1];
+                if in_ != "in" {
+                    let msg = format!("Expected an `in` keyword, found {in_} instead.");
+                    return Err(Error::ParsingError(msg));
+                }
+                let loop_variable = &for_statement_split[0];
+                let loop_array = &for_statement_split[2]; // at this point we can only assume that provided object is array.
+
+
+                return Ok(());
+            }
+        }
     }
 
     /// Crates a text node and appends it to the provided parent.

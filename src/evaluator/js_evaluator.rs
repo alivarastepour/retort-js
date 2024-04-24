@@ -17,7 +17,12 @@ pub mod js_evaluator {
     /// This block interfaces `window.Function` constructor to the rust environment.
     #[wasm_bindgen(js_namespace=window)]
     extern "C" {
+        /// takes 3 arguments: state, props and the value to be evaluated
         fn Function(arg1: String, arg2: String, function_string: String) -> Function;
+        /// takes 4 arguments: state, props, an object-which is part of state or props- and the value to be evaluated
+        fn Function1(arg1: String, arg2: String, arg3: String, function_string: String)
+            -> Function;
+
     }
 
     /// Evaluates the result of `function_string` in a JS context using the `window.Function`
@@ -30,5 +35,16 @@ pub mod js_evaluator {
             PROPS_PARAMETER.to_owned(),
             function_body,
         )
+    }
+
+    fn get_render_for_evaluator(indicator: String, function_string: String) -> () {
+        let closure = "let state=JSON.parse(state_);let current_item = JSON.parse(current_item_);if(typeof state === 'string'){state=JSON.parse(state)}if(typeof current_item === 'string'){current_item=JSON.parse(current_item)}";
+        let function_body = USE_STRICT.to_owned() + closure + RETURN + &function_string;
+        Function1(
+            STATE_PARAMETER.to_owned(),
+            PROPS_PARAMETER.to_owned(),
+            "key".to_owned(),
+            function_body,
+        );
     }
 }

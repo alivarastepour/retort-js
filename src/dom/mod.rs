@@ -151,8 +151,15 @@ pub mod dom_mod {
         current_component: &Component,
         parent: &Element,
         document: &Document,
-        tag_name: String,
     ) -> Result<(), Error> {
+        let tag_name;
+        if let NodeType::Tag(tag) = &current_root.node_type {
+            tag_name = tag;
+        } else {
+            return Err(Error::TypeError(
+                "`construct tag` was called with wrong `node_type`.".to_owned(),
+            ));
+        }
         let new_element_result = document.create_element(&tag_name);
         if new_element_result.is_err() {
             return Err(Error::DomError(new_element_result.unwrap_err()));
@@ -197,7 +204,6 @@ pub mod dom_mod {
                 }
                 let loop_variable = &for_statement_split[0];
                 let loop_array = &for_statement_split[2]; // at this point we can only assume that provided object is array.
-
 
                 return Ok(());
             }
@@ -326,14 +332,8 @@ pub mod dom_mod {
                 }
                 res = construct_dom(&component.get_vdom(), component, parent, document);
             }
-            NodeType::Tag(tag_name) => {
-                res = construct_tag(
-                    current_root,
-                    current_component,
-                    parent,
-                    document,
-                    tag_name.to_owned(),
-                );
+            NodeType::Tag(_tag_name) => {
+                res = construct_tag(current_root, current_component, parent, document);
             }
             NodeType::Text(text) => {
                 res = construct_text(text, parent, current_component);

@@ -9,7 +9,8 @@ pub mod parser_mod {
     use std::collections::HashMap;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
-    use web_sys::js_sys::Promise;
+    use web_sys::console::log_1;
+    use web_sys::js_sys::{Object, Promise, Reflect};
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
     pub enum NodeType {
@@ -49,6 +50,24 @@ pub mod parser_mod {
             return Err(CustomError::ResolveError(msg));
         }
         let result = result.unwrap();
+        // log_1(&result);
+        // let a = Reflect::set(
+        //     &result,
+        //     &JsValue::from_str("vdom"),
+        //     &JsValue::from_bool(true),
+        // );
+        // log_1(&result);
+        let a: &Object = &result.clone().into();
+        log_1(&a);
+        let a = Reflect::get_own_property_descriptor(a, &JsValue::from_str("vdom"));
+        if a.is_err() {
+            log_1(&a.unwrap_err());
+        } else {
+            let b = a.unwrap();
+            log_1(&b);
+        }
+        // let a = result.is_instance_of::<Component>();
+
         let component_result: Result<Component, serde_wasm_bindgen::Error> = from_value(result);
         if let Result::Err(err) = component_result {
             return Err(CustomError::SerdeWasmBindgenError(err));
@@ -90,10 +109,10 @@ pub mod parser_mod {
     /// If an error is encountered, an `Err` variant is returned explaining why; `Ok` otherwise,
     /// which contains a `VirtualNode` object.
     pub async fn parse_vdom_from_string(
-        parsed_file: ParsedPresenter,
+        parsed_file: &ParsedPresenter,
     ) -> Result<VirtualNode, CustomError> {
         let ParsedPresenter { imports, markup } = parsed_file;
-        let mut get_next_token = tokenizer(markup);
+        let mut get_next_token = tokenizer(markup.to_owned());
         let mut stack: Vec<VirtualNode> = Vec::new();
         let mut stack_size: usize = 0;
         let mut vdom: Vec<VirtualNode> = Vec::new();

@@ -1,9 +1,14 @@
 pub mod component_mod {
-    use std::ops::Deref;
+    use futures::{
+        future::{BoxFuture, FutureExt},
+        Future,
+    };
+    use std::{collections::HashMap, ops::Deref, pin::Pin};
 
     use crate::{
-        dom::dom_mod::construct_dom_wrapper, error::error_mod::Error as CustomError,
-        parser::parser_mod::VirtualNode,
+        dom::dom_mod::construct_dom_wrapper,
+        error::error_mod::Error as CustomError,
+        parser::parser_mod::{call_module_resolver, NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
     use serde_json::{from_str, to_string, Error, Map, Value};
@@ -58,31 +63,35 @@ pub mod component_mod {
         pub fn get_props<'a>(&'a self) -> &'a String {
             return &self.props;
         }
+
+        pub fn set_vdom(&mut self, v_node: &VirtualNode) {
+            self.vdom = Box::new(v_node.clone());
+        }
     }
 
     #[wasm_bindgen]
     impl Component {
         #[wasm_bindgen(constructor)]
-        pub async fn new(
-            state: String,
-            presenter: String,
-            component_did_mount: &Function,
-        ) -> Component {
+        pub fn new(state: String, presenter: String, component_did_mount: &Function) -> Component {
             // let state: Result<Value, Error> = from_str(&state);
             // if let Result::Err(err) = state {
             //     panic!("could not convert it: {err}");
             // }
-            let virtual_node_result: Result<VirtualNode, CustomError> =
-                Self::create_component_vdom(presenter.clone()).await;
-            if let Result::Err(err) = virtual_node_result {
-                panic!("");
-            }
+            // let virtual_node_result: Result<VirtualNode, CustomError> =
+            //     Self::create_component_vdom(presenter.clone()).await;
+            // if let Result::Err(err) = virtual_node_result {
+            //     panic!("");
+            // }
             Component {
                 state,
                 presenter,
                 props: "{}".to_owned(),
                 component_did_mount: component_did_mount.clone(),
-                vdom: Box::new(virtual_node_result.unwrap()),
+                vdom: Box::new(VirtualNode {
+                    attributes: HashMap::new(),
+                    children: Vec::new(),
+                    node_type: NodeType::Tag("t".to_owned()),
+                }),
             }
         }
 
@@ -244,7 +253,7 @@ pub mod component_mod {
                 return Err(err);
             }
             let res = res.unwrap();
-            let virtual_node_result = parse_vdom_from_string(res).await;
+            let virtual_node_result = parse_vdom_from_string(&res).await;
             if let Result::Err(err) = virtual_node_result {
                 return Err(err);
             }
@@ -280,20 +289,38 @@ pub mod component_mod {
         // 13- this process created a unified VDOM.
         // 14- from here we can start creating the actual DOM.
         // 15- I suspect if need to keep this initially created unified VDOM, since we will only work with component updates from here on, and we have VDOM of each component
-        async fn create_vdom(component: &mut Component) -> Result<VirtualNode, CustomError> {
-            let presenter = &component.presenter;
-            let res = parse_presenter(presenter);
-            if let Result::Err(err) = res {
-                return Err(err);
-            }
-            let res = res.unwrap();
-            let x = parse_vdom_from_string(res).await;
+        fn create_vdom(
+            component: &mut Component,
+        ) -> Pin<Box<dyn Future<Output = Result<(), CustomError>> + '_>> {
+            Box::pin(async {
+                let presenter = &component.presenter;
+                let res = parse_presenter(presenter);
+                if let Result::Err(err) = res {
+                    return Err(err);
+                }
+                let res = res.unwrap();
+                let x = parse_vdom_from_string(&res).await;
 
-            if let Result::Err(err) = x {
-                return Err(err);
-            }
-            let virtual_node = x.unwrap();
-            Ok(virtual_node)
+                if let Result::Err(err) = x {
+                    return Err(err);
+                }
+                let virtual_node = x.unwrap();
+                component.set_vdom(&virtual_node);
+
+                let imports = &res.imports;
+                for (_, path) in imports {
+                    let component_result = call_module_resolver(path).await;
+                    if component_result.is_err() {
+                        return Err(component_result.unwrap_err());
+                    }
+                    let mut component = component_result.unwrap();
+                    let result = Self::create_vdom(&mut component).await;
+                    if result.is_err() {
+                        return Err(result.unwrap_err());
+                    }
+                }
+                Ok(())
+            })
 
             // read content of above line's file
             // parse the markup, look for component imports
@@ -313,10 +340,19 @@ pub mod component_mod {
             // 4- Component variants though, must be replaced with what they "return".
             // 5-
         }
-
-        pub fn mount(&mut self) {
+        pub async fn mount(&mut self) {
             time();
+            let vdom_creation_result = Self::create_vdom(self).await;
+            if vdom_creation_result.is_err() {
+                log_1(&JsValue::from_str("!oops!"));
+                // return Err(vdom_creation_result.unwrap_err());
+            }
+
             let res = construct_dom_wrapper(&self);
+            if res.is_err() {
+                log_1(&JsValue::from_str("!!oops!!"));
+                // return Err(vdom_creation_result.unwrap_err());
+            }
             // self.component_did_mount.call0(&JsValue::undefined());
             // self.call_component_did_mount();
             time_end();

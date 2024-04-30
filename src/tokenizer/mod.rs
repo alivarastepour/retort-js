@@ -574,7 +574,8 @@ pub mod tokenizer_mod {
     #[cfg(test)]
     mod tests {
         use crate::tokenizer::tokenizer_mod::{
-            proceed_from_uninitialized, CurrentState, TokenizerState,
+            proceed_from_uninitialized, update_starting_tag_index, update_starting_tag_name,
+            CurrentState, TokenizerState,
         };
 
         #[test]
@@ -691,6 +692,61 @@ pub mod tokenizer_mod {
                     assert!(false)
                 }
             }
+        }
+
+        #[test]
+        /// The `update_starting_tag_index` should advance the `index` mutable reference to the first
+        /// character which is not a whitespace character.
+        fn test_update_starting_tag_index_from_whitespace() {
+            let markup_string = "<div    \n\t   ></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 4usize;
+            update_starting_tag_index(&mut index, markup.len(), &markup);
+            assert_eq!(index, 13);
+        }
+
+        #[test]
+        /// The `update_starting_tag_index` should advance the `index` mutable reference to the first
+        /// character which is not a whitespace character; so if `index` is already pointing to a
+        /// non-whitespace character, it should not be advanced.
+        fn test_update_starting_tag_index_from_non_whitespace() {
+            let markup_string = "<div    \n\t   ></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 3usize;
+            update_starting_tag_index(&mut index, markup.len(), &markup);
+            assert_eq!(index, 3);
+        }
+
+        #[test]
+        /// the `update_starting_tag_index` should not advance the `index` to illegal state,
+        /// which is more than length of markup vector.
+        fn test_update_starting_tag_index_from_last_char() {
+            let markup_string = "<div></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let max = markup.len();
+            let mut index = max as usize;
+            update_starting_tag_index(&mut index, max, &markup);
+            assert_eq!(index, max);
+        }
+
+        #[test]
+        /// When index is pointing to the first character of tag name, calling `update_starting_tag_name`
+        /// must advance the mutable reference of `index` to the position of tag name's last character.
+        fn test_update_starting_tag_name() {
+            let markup_arr = vec![
+                "<p id={\"hi\"}></p>".to_owned(),
+                "<p></p>".to_owned(),
+                "<p ></p>".to_owned(),
+            ];
+            let mut res: Vec<bool> = Vec::new();
+            for markup_string in markup_arr {
+                let markup: Vec<char> = markup_string.chars().collect();
+                let mut index = 1usize;
+                let mut tag_name: String = String::new();
+                update_starting_tag_name(&mut index, &mut tag_name, &markup);
+                res.push(index == 1 && tag_name == "p");
+            }
+            assert!(res.iter().all(|r| *r))
         }
     }
 }

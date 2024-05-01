@@ -573,10 +573,15 @@ pub mod tokenizer_mod {
     }
     #[cfg(test)]
     mod tests {
+        use std::result;
+
+        use crate::error::error_mod::Error;
         use crate::tokenizer::tokenizer_mod::{
             proceed_from_uninitialized, update_starting_tag_index, update_starting_tag_name,
             CurrentState, TokenizerState,
         };
+
+        use super::get_state_after_tag_name;
 
         #[test]
         #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
@@ -747,6 +752,89 @@ pub mod tokenizer_mod {
                 res.push(index == 1 && tag_name == "p");
             }
             assert!(res.iter().all(|r| *r))
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` validates the argument which is passed to it as `tag_name`
+        /// parameter and will return error if `tag_name` is not alphanumerical.
+        fn test_get_state_after_tag_name_illegal_character() {
+            let tag_name = String::from("article<");
+            let result = get_state_after_tag_name(tag_name, TokenizerState::OpenAngleBracket);
+            if result.is_err() {
+                assert!(matches!(result.unwrap_err(), Error::ParsingError(_)));
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return a `TokenizerState::Component` variant when
+        /// provided `tag_name` starts with a uppercase character.
+        fn test_get_state_after_tag_name_with_component() {
+            let tag_name = String::from("TableRow");
+            let result =
+                get_state_after_tag_name(tag_name.clone(), TokenizerState::OpenAngleBracket);
+            if result.is_ok() {
+                let CurrentState { state, token } = result.unwrap();
+                assert!(matches!(state, TokenizerState::Component) && token == tag_name);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return a `TokenizerState::TagNameOpen` variant when
+        /// current state is `TokenizerState::OpenAngleBracket`
+        fn test_get_state_after_tag_name_open() {
+            let tag_name = String::from("span");
+            let result =
+                get_state_after_tag_name(tag_name.clone(), TokenizerState::OpenAngleBracket);
+            if result.is_ok() {
+                let CurrentState { state, token } = result.unwrap();
+                assert!(matches!(state, TokenizerState::TagNameOpen) && token == tag_name);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return a `TokenizerState::TagNameClose` variant when
+        /// current state is `TokenizerState::ClosingAngleBracket`
+        fn test_get_state_after_tag_name_close() {
+            let tag_name = String::from("span");
+            let result =
+                get_state_after_tag_name(tag_name.clone(), TokenizerState::ClosingAngleBracket);
+            if result.is_ok() {
+                let CurrentState { state, token } = result.unwrap();
+                assert!(matches!(state, TokenizerState::TagNameClose) && token == tag_name);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return an error if it was called from any `TokenizerState`
+        /// other than `TokenizerState::ClosingAngleBracket` and `TokenizerState::OpenAngleBracket`.
+        fn test_get_state_after_tag_name_invalid_caller() {
+            let tag_name = String::from("span");
+            let invalid_callers: Vec<TokenizerState> = vec![
+                TokenizerState::Uninitialized,
+                TokenizerState::SelfClosingAngleBracket,
+                TokenizerState::TagNameOpen,
+                TokenizerState::TagNameClose,
+                TokenizerState::Component,
+                TokenizerState::Props,
+                TokenizerState::Text,
+                TokenizerState::Finalized,
+            ];
+            for caller in invalid_callers {
+                let result = get_state_after_tag_name(tag_name.clone(), caller);
+                if result.is_err() {
+                    assert!(matches!(result.unwrap_err(), Error::TypeError(_)));
+                } else {
+                    assert!(false);
+                }
+            }
         }
     }
 }

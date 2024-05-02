@@ -10,7 +10,10 @@ pub mod component_mod {
     use serde_json::to_string;
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::{console::log_1, js_sys::Function};
+    use web_sys::{
+        console::log_1,
+        js_sys::{Function, Object, JSON},
+    };
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -63,6 +66,8 @@ pub mod component_mod {
     impl Component {
         #[wasm_bindgen(constructor)]
         pub fn new(state: String, presenter: String, component_did_mount: &Function) -> Component {
+            // log_1(&JsValue::from_str("from cons: "));
+            // log_1(&JsValue::from_str(&state));
             Component {
                 state,
                 presenter,
@@ -98,8 +103,14 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen(getter)]
+        pub fn state_parsed(&self) -> JsValue {
+            // TODO:: observe usages of state property and their types, remove extra functionalities
+            JSON::parse(&self.state).unwrap_or(JsValue::null())
+        }
+
+        #[wasm_bindgen(getter)]
         pub fn state(&self) -> String {
-            to_string(&self.state).unwrap()
+            self.state.clone()
         }
 
         #[wasm_bindgen(getter)]
@@ -120,6 +131,35 @@ pub mod component_mod {
         #[wasm_bindgen(setter)]
         pub fn set_presenter(&mut self, presenter: String) {
             self.presenter = presenter;
+        }
+
+        #[wasm_bindgen]
+        pub fn set_state(&mut self, callback: Function) {
+            let state_js_value = self.state_parsed();
+            // if state_js_value_result.is_err() {
+            //     panic!("")
+            // }
+            // log_1(&state_js_value);
+            // let state_js_value = state_js_value_result.unwrap();
+            let new_state_result = callback.call1(&JsValue::undefined(), &state_js_value);
+            if new_state_result.is_err() {
+                let msg_js_value = new_state_result.as_ref().unwrap_err();
+                let msg = JsValue::as_string(&msg_js_value).unwrap_or(String::from(
+                    "Error occurred while setting the state of component.",
+                ));
+            }
+            log_1(&JsValue::from_str("1"));
+            let new_state = new_state_result.unwrap();
+            let new_state_string = JSON::stringify(&new_state).unwrap();
+            // log_1(&a);
+            // let new_state_string_option = new_state.as_string();
+            // if new_state_string_option.is_none() {
+            //     let msg = "Could not convert the new state value";
+            // }
+            log_1(&JsValue::from_str("2"));
+            // let new_state_string = new_state_string_option.unwrap();
+            self.state = new_state_string.into();
+            log_1(&JsValue::from_str("3"));
         }
 
         async fn create_vdom(component: &mut Component) -> Result<(), CustomError> {
@@ -145,7 +185,22 @@ pub mod component_mod {
         pub async fn render(&mut self) -> Component {
             let vdom_creation_result = Self::create_vdom(self).await;
             if vdom_creation_result.is_err() {
-                panic!("")
+                let err = vdom_creation_result.unwrap_err();
+                match err {
+                    CustomError::TypeError(e) => {
+                        log_1(&JsValue::from_str(&e));
+                    }
+                    CustomError::SerdeWasmBindgenError(e) => {
+                        let a = e.to_string();
+                        log_1(&JsValue::from_str(&a));
+                    }
+                    CustomError::ResolveError(e) => {
+                        log_1(&JsValue::from_str(&e));
+                    }
+                    _ => {
+                        log_1(&JsValue::from_str("others2"));
+                    }
+                }
             }
             return self.clone();
         }

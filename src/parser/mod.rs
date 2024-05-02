@@ -5,10 +5,11 @@ pub mod parser_mod {
     use crate::presenter::presenter_mod::ParsedPresenter;
     use crate::tokenizer::tokenizer_mod::{tokenizer, CurrentState, TokenizerState};
     use serde::{Deserialize, Serialize};
-    use serde_wasm_bindgen::from_value;
+    use serde_wasm_bindgen::{from_value, to_value};
     use std::collections::HashMap;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
+    use web_sys::console::log_1;
     use web_sys::js_sys::Promise;
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -53,6 +54,7 @@ pub mod parser_mod {
         let result = result.unwrap();
         let component_result: Result<Component, serde_wasm_bindgen::Error> = from_value(result);
         if let Result::Err(err) = component_result {
+            log_1(&JsValue::from_str("some error ??!!??"));
             return Err(CustomError::SerdeWasmBindgenError(err));
         }
         let component = component_result.unwrap();
@@ -142,6 +144,8 @@ pub mod parser_mod {
                     let component_path = component_path.unwrap();
                     let component = call_module_resolver(&component_path).await;
                     if let Result::Err(err) = component {
+                        // let a = to_value(&err);
+                        log_1(&JsValue::from_str(&component_path));
                         return Err(err);
                     }
                     let component = component.unwrap();

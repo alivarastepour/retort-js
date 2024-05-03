@@ -571,4 +571,448 @@ pub mod tokenizer_mod {
 
         next
     }
+
+    #[cfg(test)]
+
+    /// Test module for `tokenizer` module's functionality.
+    ///
+    ///
+    /// Note that it is preferred to have tests and functionality in separate modules; however, this
+    /// would require to publicly interface ALL functionality of a module, which is not desired.
+    mod tests {
+
+        use crate::error::error_mod::Error;
+        use crate::tokenizer::tokenizer_mod::{
+            proceed_from_open_angle_bracket, proceed_from_uninitialized, update_starting_tag_index,
+            update_starting_tag_name, CurrentState, TokenizerState,
+        };
+
+        use super::{
+            get_state_after_slash, get_state_after_tag_name, get_state_from_props,
+            proceed_from_name, read_key_of_prop, read_value_of_prop, tokenizer,
+        };
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
+        /// An empty markup, which is any markup that has no char other than whitespace, should
+        /// make tokenization state to `Finalized`.
+        fn test_empty_markup() {
+            let markup: Vec<char> = "          \n   \t  \n".chars().collect();
+            let mut index = 0usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Finalized => {
+                    assert!(token == "" && index == markup.len() - 1)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/5"]
+        fn test_text_markup() {
+            let markup_string = "This is a plain test";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 0usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Finalized => {
+                    assert!(token == markup_string && index == markup.len() - 1)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// When at `CurrentState::Uninitialized` and the next non-whitespace char is an open angle
+        /// bracket, `CurrentState::OpenAngleBracket` must be the new state; index should be equal to
+        /// index of open angle bracket char.
+        fn test_open_angle_bracket() {
+            let markup_string = "    <div";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 0usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::OpenAngleBracket => {
+                    assert!(token == "<" && index == 4)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// When at `CurrentState::Uninitialized` and the next non-whitespace char is an open angle
+        /// bracket, `CurrentState::ClosingAngleBracket` must be the new state if there is a `/` char
+        /// regardless of non-whitespace chars after it; index should be equal to index of `/` char.
+        fn test_closing_angle_bracket() {
+            let markup_string = "<div>hi<   /  div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 7usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::ClosingAngleBracket => {
+                    assert!(token == "</" && index == 11)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// When at `CurrentState::CloseAngleBracket` and the next non-whitespace char is not an open angle
+        /// bracket, `CurrentState::Text` must be the new state; index should be equal to
+        /// index of text's last char.
+        fn test_text_inside_tag() {
+            let markup_string = "<div>hello world<div>hi</div></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Text => {
+                    assert!(token == "hello world" && index == 15)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/13"]
+        /// This can be removed when issue is resolved.
+        fn test_curly_brackets() {
+            let markup_string = "<div>}hi</div> ";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let CurrentState { state, token } =
+                proceed_from_uninitialized(&markup, &mut index).unwrap();
+            match state {
+                TokenizerState::Text => {
+                    assert!(token == "}hi" && index == 7)
+                }
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+
+        #[test]
+        /// The `update_starting_tag_index` should advance the `index` mutable reference to the first
+        /// character which is not a whitespace character.
+        fn test_update_starting_tag_index_from_whitespace() {
+            let markup_string = "<div    \n\t   ></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 4usize;
+            update_starting_tag_index(&mut index, markup.len(), &markup);
+            assert_eq!(index, 13);
+        }
+
+        #[test]
+        /// The `update_starting_tag_index` should advance the `index` mutable reference to the first
+        /// character which is not a whitespace character; so if `index` is already pointing to a
+        /// non-whitespace character, it should not be advanced.
+        fn test_update_starting_tag_index_from_non_whitespace() {
+            let markup_string = "<div    \n\t   ></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 3usize;
+            update_starting_tag_index(&mut index, markup.len(), &markup);
+            assert_eq!(index, 3);
+        }
+
+        #[test]
+        /// the `update_starting_tag_index` should not advance the `index` to illegal state,
+        /// which is more than length of markup vector.
+        fn test_update_starting_tag_index_from_last_char() {
+            let markup_string = "<div></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let max = markup.len();
+            let mut index = max as usize;
+            update_starting_tag_index(&mut index, max, &markup);
+            assert_eq!(index, max);
+        }
+
+        #[test]
+        /// When index is pointing to the first character of tag name, calling `update_starting_tag_name`
+        /// must advance the mutable reference of `index` to the position of tag name's last character.
+        fn test_update_starting_tag_name() {
+            let markup_arr = vec![
+                "<p id={\"hi\"}></p>".to_owned(),
+                "<p></p>".to_owned(),
+                "<p ></p>".to_owned(),
+            ];
+            let mut res: Vec<bool> = Vec::new();
+            for markup_string in markup_arr {
+                let markup: Vec<char> = markup_string.chars().collect();
+                let mut index = 1usize;
+                let mut tag_name: String = String::new();
+                update_starting_tag_name(&mut index, &mut tag_name, &markup);
+                res.push(index == 1 && tag_name == "p");
+            }
+            assert!(res.iter().all(|r| *r))
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` validates the argument which is passed to it as `tag_name`
+        /// parameter and will return error if `tag_name` is not alphanumerical.
+        fn test_get_state_after_tag_name_illegal_character() {
+            let tag_name = String::from("article<");
+            let result = get_state_after_tag_name(tag_name, TokenizerState::OpenAngleBracket);
+            if result.is_err() {
+                assert!(matches!(result.unwrap_err(), Error::ParsingError(_)));
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return a `TokenizerState::Component` variant when
+        /// provided `tag_name` starts with a uppercase character.
+        fn test_get_state_after_tag_name_with_component() {
+            let tag_name = String::from("TableRow");
+            let result =
+                get_state_after_tag_name(tag_name.clone(), TokenizerState::OpenAngleBracket);
+            if result.is_ok() {
+                let CurrentState { state, token } = result.unwrap();
+                assert!(matches!(state, TokenizerState::Component) && token == tag_name);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return a `TokenizerState::TagNameOpen` variant when
+        /// current state is `TokenizerState::OpenAngleBracket`
+        fn test_get_state_after_tag_name_open() {
+            let tag_name = String::from("span");
+            let result =
+                get_state_after_tag_name(tag_name.clone(), TokenizerState::OpenAngleBracket);
+            if result.is_ok() {
+                let CurrentState { state, token } = result.unwrap();
+                assert!(matches!(state, TokenizerState::TagNameOpen) && token == tag_name);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return a `TokenizerState::TagNameClose` variant when
+        /// current state is `TokenizerState::ClosingAngleBracket`
+        fn test_get_state_after_tag_name_close() {
+            let tag_name = String::from("span");
+            let result =
+                get_state_after_tag_name(tag_name.clone(), TokenizerState::ClosingAngleBracket);
+            if result.is_ok() {
+                let CurrentState { state, token } = result.unwrap();
+                assert!(matches!(state, TokenizerState::TagNameClose) && token == tag_name);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `get_state_after_tag_name` must return an error if it was called from any `TokenizerState`
+        /// other than `TokenizerState::ClosingAngleBracket` and `TokenizerState::OpenAngleBracket`.
+        fn test_get_state_after_tag_name_invalid_caller() {
+            let tag_name = String::from("span");
+            let invalid_callers: Vec<TokenizerState> = vec![
+                TokenizerState::Uninitialized,
+                TokenizerState::SelfClosingAngleBracket,
+                TokenizerState::TagNameOpen,
+                TokenizerState::TagNameClose,
+                TokenizerState::Component,
+                TokenizerState::Props,
+                TokenizerState::Text,
+                TokenizerState::Finalized,
+            ];
+            for caller in invalid_callers {
+                let result = get_state_after_tag_name(tag_name.clone(), caller);
+                if result.is_err() {
+                    assert!(matches!(result.unwrap_err(), Error::TypeError(_)));
+                } else {
+                    assert!(false);
+                }
+            }
+        }
+
+        #[test]
+        /// `proceed_from_open_angle_bracket` should return an `Err` variant if there is no non-empty character
+        /// after `<`.
+        ///
+        /// Note that this is the only scenario which is checked for `proceed_from_open_angle_bracket`, because
+        /// rest of its logic is basically tested. See test cases for `update_starting_tag_index`,
+        /// `get_state_after_tag_name` and `update_starting_tag_name`.
+        fn test_proceed_from_open_angle_bracket_empty() {
+            let markup_string = "< ";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 1usize;
+            let proceed_from_open_angle_bracket_result = proceed_from_open_angle_bracket(
+                &markup,
+                &mut index,
+                TokenizerState::OpenAngleBracket,
+            );
+            assert!(matches!(
+                proceed_from_open_angle_bracket_result,
+                Result::Err(err) if matches!(err, Error::ParsingError(_))
+            ))
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/20"]
+        fn test_read_key_of_prop_invalid() {
+            let markup_string = "<div id=";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let _ = read_key_of_prop(&mut index, &markup);
+            panic!();
+        }
+
+        #[test]
+        fn test_read_key_of_prop_valid() {
+            let markup_string = "<div id={\"hi\"}></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let key = read_key_of_prop(&mut index, &markup);
+            assert!(key == "id=" && index == 7);
+        }
+
+        #[test]
+        /// `read_value_of_prop` expects `index` to point to a `{` character(after ignoring whitespace characters);
+        /// It must return an `Err` if it's not found.
+        fn test_read_value_of_prop_invalid_wrapper() {
+            let markup_string = "<div id=\"hi\"></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 8usize;
+            let read_value_of_prop_result = read_value_of_prop(&mut index, &markup);
+            assert!(
+                matches!(read_value_of_prop_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            );
+        }
+
+        #[test]
+        /// `read_value_of_prop` must return an `Ok` variant when it encounters a value of prop/attribute;
+        /// furthermore, it should update the `index` to point to `}` character.
+        fn test_read_value_of_prop() {
+            let markup_string = "<div id={\"hi\"}></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 8usize;
+            let read_value_of_prop_result = read_value_of_prop(&mut index, &markup);
+            if read_value_of_prop_result.is_ok() {
+                let read_value_of_prop = read_value_of_prop_result.unwrap();
+                assert_eq!(read_value_of_prop, "{\"hi\"}");
+                assert_eq!(index, 13);
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `read_value_of_prop` must return an `Err` variant when bracket sequence encounters more `{` than
+        /// `}`. Note that the other way around is not handled by this function and is left off to the next
+        /// state handler.
+        fn test_read_value_of_prop_invalid_bracket_sequence() {
+            let markup_string = "<div id={{\"hi\"}></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 8usize;
+            let read_value_of_prop_result = read_value_of_prop(&mut index, &markup);
+            assert!(
+                matches!(read_value_of_prop_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            )
+        }
+
+        #[test]
+        /// `get_state_after_slash` should return an `Ok` variant if it encounters a `>` after observing a
+        /// `/` character.
+        fn test_get_state_after_slash_valid() {
+            let markup_string = "<img / >";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let max = markup.len();
+            let get_state_after_slash_result = get_state_after_slash(&mut index, &markup, max);
+            assert!(
+                matches!(get_state_after_slash_result, Ok(val) if matches!(val.state, TokenizerState::SelfClosingAngleBracket) && matches!(val.token.as_str(), "/>"))
+            )
+        }
+
+        #[test]
+        /// `get_state_after_slash` must return an `Err` variant if no `>` is found after a `/` character.
+        fn test_get_state_after_slash_invalid() {
+            let markup_string = "<img / <p>hi</p>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let max = markup.len();
+            let get_state_after_slash_result = get_state_after_slash(&mut index, &markup, max);
+            assert!(
+                matches!(get_state_after_slash_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            )
+        }
+
+        #[test]
+        /// `get_state_from_props` is essentially a wrapper for `read_key_of_prop` and `read_value_of_prop`,
+        /// so there is no further point in testing it thoroughly.
+        fn test_get_state_from_props() {
+            let markup_string = "<img src = {state.src}/>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let prop_result = get_state_from_props(&mut index, &markup);
+            if prop_result.is_ok() {
+                let CurrentState { state, token } = prop_result.unwrap();
+                assert!(matches!(state, TokenizerState::Props));
+                assert_eq!(token, "src={state.src}");
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[test]
+        /// `proceed_from_name` should return an `Ok` which contains a `>` character when reached one
+        /// after a tag's name.
+        ///
+        /// Note that other paths of `proceed_from_name` are covered in previous tests.
+        fn test_proceed_from_name() {
+            let markup_string = "<h2>Hello world</h2  >";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 19usize;
+            let proceed_from_name_result = proceed_from_name(&markup, &mut index);
+            assert!(
+                matches!(proceed_from_name_result, Ok(val) if matches!(val.state, TokenizerState::CloseAngleBracket) && matches!(val.token.as_str(), ">"))
+            );
+        }
+
+        // TODO: add tests for the runner every now and then.
+        #[test]
+        fn tokenizer_test_1() {
+            let markup = String::from(
+                "  <div>
+            <h2>{\"User: {username}\"}</h2>
+            <p>{\"Age: {age}\"}</p>
+            <img src={\"https://example.com/{username}\"} alt={\"Profile picture of {username}\"} />
+            <a href={\"https://example.com/{username}\"} target={\"_blank\"}>View Profile</a>
+          </div>",
+            );
+            let mut generator = tokenizer(markup);
+            loop {
+                let generator_res = generator();
+                assert!(!matches!(generator_res, Err(_)));
+                let CurrentState {
+                    state,
+                    token: _token,
+                } = generator_res.unwrap();
+                if matches!(state, TokenizerState::Finalized) {
+                    break;
+                }
+            }
+        }
+    }
 }

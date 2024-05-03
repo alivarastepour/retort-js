@@ -241,12 +241,14 @@ pub mod tokenizer_mod {
     /// or attributes like `alt={"This is an image"}`.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which in this context, is supposed to be PROP_KEY_VALUE_SEPARATOR.
-    fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
+    fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> Result<String, Error> {
         let max = markup.len();
         let mut key = String::from("");
         loop {
             if *index == max {
-                break;
+                return Err(Error::ParsingError(
+                    "Expected a key-value pair, but reached the end of markup.".to_owned(),
+                ));
             }
             let mut current = markup[*index].to_string(); // TODO: generalize this shit
             current = current.trim().to_owned();
@@ -258,7 +260,7 @@ pub mod tokenizer_mod {
             }
             *index += 1;
         }
-        return key;
+        return Ok(key);
     }
 
     /// Returns `Ok` variant containing a String which is supposed to be the value for
@@ -334,7 +336,11 @@ pub mod tokenizer_mod {
     /// Returns an `Ok` including pair of props if its format is correct, `Err` otherwise.
     /// Currently, the acceptable prop format is `key={"value"}`, `key={'value'}` and `key={js expression}`
     fn get_state_from_props(index: &mut usize, markup: &Vec<char>) -> Result<CurrentState, Error> {
-        let key = read_key_of_prop(index, markup);
+        let key_result = read_key_of_prop(index, markup);
+        if key_result.is_err() {
+            return Err(key_result.unwrap_err());
+        }
+        let key = key_result.unwrap();
         *index += 1; // This is for PROP_KEY_VALUE_SEPARATOR
         let value_result = read_value_of_prop(index, markup);
         if value_result.is_err() {
@@ -889,7 +895,7 @@ pub mod tokenizer_mod {
             let markup_string = "<div id={\"hi\"}></div>";
             let markup: Vec<char> = markup_string.chars().collect();
             let mut index = 5usize;
-            let key = read_key_of_prop(&mut index, &markup);
+            let key = read_key_of_prop(&mut index, &markup).unwrap();
             assert!(key == "id=" && index == 7);
         }
 

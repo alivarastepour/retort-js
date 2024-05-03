@@ -92,6 +92,7 @@ pub mod tokenizer_mod {
         update_starting_tag_index(index, max, markup);
         loop {
             if *index == max {
+                *index -= 1;
                 let res = CurrentState {
                     state: TokenizerState::Finalized,
                     token: "".to_owned(),

@@ -7,10 +7,12 @@ pub mod component_mod {
         parser::parser_mod::{NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
-    use serde_json::to_string;
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::{console::log_1, js_sys::Function};
+    use web_sys::{
+        console::log_1,
+        js_sys::{Function, JSON},
+    };
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -98,8 +100,14 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen(getter)]
+        pub fn state_parsed(&self) -> JsValue {
+            // TODO:: observe usages of state property and their types, remove extra functionalities
+            JSON::parse(&self.state).unwrap_or(JsValue::null())
+        }
+
+        #[wasm_bindgen(getter)]
         pub fn state(&self) -> String {
-            to_string(&self.state).unwrap()
+            self.state.clone()
         }
 
         #[wasm_bindgen(getter)]
@@ -122,6 +130,28 @@ pub mod component_mod {
             self.presenter = presenter;
         }
 
+        #[wasm_bindgen]
+        /// Updates the `state` of a component which this function is called with, using a callback function.
+        /// provided callback is called with component's current `state` as an argument, allowing user to
+        /// return the component's next `state` accordingly.
+        pub fn set_state(&mut self, callback: Function) {
+            let state_js_value = self.state_parsed();
+            let new_state_result = callback.call1(&JsValue::undefined(), &state_js_value);
+            if new_state_result.is_err() {
+                let msg_js_value = new_state_result.as_ref().unwrap_err();
+                let msg = JsValue::as_string(&msg_js_value).unwrap_or(String::from(
+                    "Error occurred while setting the state of component.",
+                ));
+            }
+            let new_state = new_state_result.unwrap();
+            let new_state_string = JSON::stringify(&new_state).unwrap();
+            self.state = new_state_string.into();
+        }
+
+        /// Given a component object, parses its presenter using the `parse_presenter` function and then
+        /// constructs a `VirtualNode` from its result, which corresponds to the current component's
+        /// markup structure. An `Ok` variant is returned if nothing goes wrong, `Err` variant otherwise,
+        /// explaining what went wrong.
         async fn create_vdom(component: &mut Component) -> Result<(), CustomError> {
             let presenter = &component.presenter;
             let parsed_presenter_result = parse_presenter(presenter);
@@ -142,18 +172,37 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen]
+        /// An async wrapper for calling the `Self::create_vdom(self)`.
         pub async fn render(&mut self) -> Component {
             let vdom_creation_result = Self::create_vdom(self).await;
             if vdom_creation_result.is_err() {
-                panic!("")
+                let err = vdom_creation_result.unwrap_err();
+                match err {
+                    CustomError::TypeError(e) => {
+                        log_1(&JsValue::from_str(&e));
+                    }
+                    CustomError::SerdeWasmBindgenError(e) => {
+                        let a = e.to_string();
+                        log_1(&JsValue::from_str(&a));
+                    }
+                    CustomError::ResolveError(e) => {
+                        log_1(&JsValue::from_str(&e));
+                    }
+                    _ => {
+                        log_1(&JsValue::from_str("others"));
+                    }
+                }
             }
             return self.clone();
         }
 
-        pub async fn mount(&mut self) {
+        #[wasm_bindgen]
+        /// constructs the DOM from a given entry point. This should be called from the component
+        /// that wraps the entire component tree, otherwise a subtree of components will be added to DOM.
+        pub fn mount(&mut self) {
             let res = construct_dom_wrapper(&self);
             if res.is_err() {
-                log_1(&JsValue::from_str("!!oops!!"));
+                panic!("")
             }
         }
     }

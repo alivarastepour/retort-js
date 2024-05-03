@@ -88,38 +88,47 @@ pub mod tokenizer_mod {
     ) -> Result<CurrentState, Error> {
         let max = markup.len();
         let mut text = String::from("");
-        let mut curly_bracket_stack: Vec<String> = Vec::new();
+        // let mut curly_bracket_stack: Vec<String> = Vec::new();
         update_starting_tag_index(index, max, markup);
         loop {
             if *index == max {
+                *index -= 1;
+                let state: TokenizerState = if text == "" {
+                    TokenizerState::Finalized
+                } else {
+                    TokenizerState::Text
+                };
                 let res = CurrentState {
-                    state: TokenizerState::Finalized,
-                    token: "".to_owned(),
+                    state,
+                    token: text.to_owned(),
                 };
                 return Ok(res);
             }
             let current = markup[*index].to_string();
 
             if current != OPEN_ANGLE_BRACKET {
-                if current == OPEN_CURLY_BRACKET {
-                    curly_bracket_stack.push(OPEN_CURLY_BRACKET.to_owned());
-                } else if current == CLOSE_CURLY_BRACKET {
-                    let popped_bracket = curly_bracket_stack.pop();
-                    if popped_bracket.is_none() {
-                        let err = Error::ParsingError(
-                            "There was a parsing Error: Expected a `}`, but did not find it."
-                                .to_owned(),
-                        );
-                        return Err(err);
-                    }
-                }
+                // TODO: No errors should be encountered by removing this,
+                // however, we leave it as comment for now.
+
+                // if current == OPEN_CURLY_BRACKET {
+                //     curly_bracket_stack.push(OPEN_CURLY_BRACKET.to_owned());
+                // } else if current == CLOSE_CURLY_BRACKET {
+                //     let popped_bracket = curly_bracket_stack.pop();
+                //     if popped_bracket.is_none() {
+                //         let err = Error::ParsingError(
+                //             "There was a parsing Error: Expected a `}`, but did not find it."
+                //                 .to_owned(),
+                //         );
+                //         return Err(err);
+                //     }
+                // }
                 text.push_str(&current);
             } else {
-                if curly_bracket_stack.is_empty() {
-                    return get_state_after_open_angle_bracket(text, index, markup);
-                } else {
-                    text.push_str(&current);
-                }
+                // if curly_bracket_stack.is_empty() {
+                return get_state_after_open_angle_bracket(text, index, markup);
+                // } else {
+                // text.push_str(&current);
+                // }
             }
             *index = *index + 1;
         }
@@ -142,7 +151,9 @@ pub mod tokenizer_mod {
     }
 
     /// Advances `index` to the end of tag name. It will update mutable references of both `index` and
-    /// `tag_name`
+    /// `tag_name`.This function assumes that `index` currently stands on starting
+    /// character of the tag name, which is a non-whitespace character; so the caller needs to have
+    /// called the `update_starting_tag_index` before calling this function.
     fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
         loop {
             let mut current = markup[*index].to_string();
@@ -197,7 +208,7 @@ pub mod tokenizer_mod {
                     return Ok(res);
                 }
                 _ => {
-                    let err = Error::TypeError("This function shouldn't have been called with this variant of TokenizerState.".to_owned());
+                    let err = Error::TypeError("`get_state_after_tag_name` shouldn't have been called with this variant of `TokenizerState` as the caller; tokenizer reached a tag name without reaching `<` or `>` first.".to_owned());
                     return Err(err);
                 }
             }
@@ -222,6 +233,7 @@ pub mod tokenizer_mod {
 
         update_starting_tag_index(index, max, markup);
         if *index == max {
+            *index -= 1;
             let err =
                 Error::ParsingError("No tag name was found after open angle bracket.".to_owned());
             return Err(err);
@@ -235,12 +247,15 @@ pub mod tokenizer_mod {
     /// or attributes like `alt={"This is an image"}`.
     /// This function is responsible for advancing `index` till it reaches the char that shows the last
     /// tokenized char, which in this context, is supposed to be PROP_KEY_VALUE_SEPARATOR.
-    fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> String {
+    fn read_key_of_prop(index: &mut usize, markup: &Vec<char>) -> Result<String, Error> {
         let max = markup.len();
         let mut key = String::from("");
         loop {
             if *index == max {
-                break;
+                *index -= 1;
+                return Err(Error::ParsingError(
+                    "Expected a key-value pair, but reached the end of markup.".to_owned(),
+                ));
             }
             let mut current = markup[*index].to_string(); // TODO: generalize this shit
             current = current.trim().to_owned();
@@ -252,7 +267,7 @@ pub mod tokenizer_mod {
             }
             *index += 1;
         }
-        return key;
+        return Ok(key);
     }
 
     /// Returns `Ok` variant containing a String which is supposed to be the value for
@@ -273,7 +288,10 @@ pub mod tokenizer_mod {
         let mut wrapper_stack: Vec<String> = Vec::new();
         loop {
             if *index == max {
-                break;
+                *index -= 1;
+                return Err(Error::ParsingError(
+                    "Expected a key-value pair, but reached the end of markup.".to_owned(),
+                ));
             }
             let mut current = markup[*index].to_string(); // todo: generalize this shit
             current = current.to_owned();
@@ -328,7 +346,11 @@ pub mod tokenizer_mod {
     /// Returns an `Ok` including pair of props if its format is correct, `Err` otherwise.
     /// Currently, the acceptable prop format is `key={"value"}`, `key={'value'}` and `key={js expression}`
     fn get_state_from_props(index: &mut usize, markup: &Vec<char>) -> Result<CurrentState, Error> {
-        let key = read_key_of_prop(index, markup);
+        let key_result = read_key_of_prop(index, markup);
+        if key_result.is_err() {
+            return Err(key_result.unwrap_err());
+        }
+        let key = key_result.unwrap();
         *index += 1; // This is for PROP_KEY_VALUE_SEPARATOR
         let value_result = read_value_of_prop(index, markup);
         if value_result.is_err() {
@@ -581,19 +603,15 @@ pub mod tokenizer_mod {
     /// would require to publicly interface ALL functionality of a module, which is not desired.
     mod tests {
 
-        use crate::error::error_mod::Error;
-        use crate::tokenizer::tokenizer_mod::{
-            proceed_from_open_angle_bracket, proceed_from_uninitialized, update_starting_tag_index,
-            update_starting_tag_name, CurrentState, TokenizerState,
-        };
-
         use super::{
             get_state_after_slash, get_state_after_tag_name, get_state_from_props,
-            proceed_from_name, read_key_of_prop, read_value_of_prop, tokenizer,
+            proceed_from_name, proceed_from_open_angle_bracket, proceed_from_uninitialized,
+            read_key_of_prop, read_value_of_prop, tokenizer, update_starting_tag_index,
+            update_starting_tag_name, CurrentState, TokenizerState,
         };
+        use crate::error::error_mod::Error;
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
         /// An empty markup, which is any markup that has no char other than whitespace, should
         /// make tokenization state to `Finalized`.
         fn test_empty_markup() {
@@ -612,7 +630,6 @@ pub mod tokenizer_mod {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/5"]
         fn test_text_markup() {
             let markup_string = "This is a plain test";
             let markup: Vec<char> = markup_string.chars().collect();
@@ -620,7 +637,7 @@ pub mod tokenizer_mod {
             let CurrentState { state, token } =
                 proceed_from_uninitialized(&markup, &mut index).unwrap();
             match state {
-                TokenizerState::Finalized => {
+                TokenizerState::Text => {
                     assert!(token == markup_string && index == markup.len() - 1)
                 }
                 _ => {
@@ -682,25 +699,6 @@ pub mod tokenizer_mod {
             match state {
                 TokenizerState::Text => {
                     assert!(token == "hello world" && index == 15)
-                }
-                _ => {
-                    assert!(false)
-                }
-            }
-        }
-
-        #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/13"]
-        /// This can be removed when issue is resolved.
-        fn test_curly_brackets() {
-            let markup_string = "<div>}hi</div> ";
-            let markup: Vec<char> = markup_string.chars().collect();
-            let mut index = 5usize;
-            let CurrentState { state, token } =
-                proceed_from_uninitialized(&markup, &mut index).unwrap();
-            match state {
-                TokenizerState::Text => {
-                    assert!(token == "}hi" && index == 7)
                 }
                 _ => {
                     assert!(false)
@@ -869,13 +867,14 @@ pub mod tokenizer_mod {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/20"]
         fn test_read_key_of_prop_invalid() {
-            let markup_string = "<div id=";
+            let markup_string = "<div id";
             let markup: Vec<char> = markup_string.chars().collect();
             let mut index = 5usize;
-            let _ = read_key_of_prop(&mut index, &markup);
-            panic!();
+            let read_key_of_prop_result = read_key_of_prop(&mut index, &markup);
+            assert!(
+                matches!(read_key_of_prop_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            )
         }
 
         #[test]
@@ -883,7 +882,7 @@ pub mod tokenizer_mod {
             let markup_string = "<div id={\"hi\"}></div>";
             let markup: Vec<char> = markup_string.chars().collect();
             let mut index = 5usize;
-            let key = read_key_of_prop(&mut index, &markup);
+            let key = read_key_of_prop(&mut index, &markup).unwrap();
             assert!(key == "id=" && index == 7);
         }
 

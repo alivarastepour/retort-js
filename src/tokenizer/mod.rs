@@ -101,18 +101,21 @@ pub mod tokenizer_mod {
             let current = markup[*index].to_string();
 
             if current != OPEN_ANGLE_BRACKET {
-                if current == OPEN_CURLY_BRACKET {
-                    curly_bracket_stack.push(OPEN_CURLY_BRACKET.to_owned());
-                } else if current == CLOSE_CURLY_BRACKET {
-                    let popped_bracket = curly_bracket_stack.pop();
-                    if popped_bracket.is_none() {
-                        let err = Error::ParsingError(
-                            "There was a parsing Error: Expected a `}`, but did not find it."
-                                .to_owned(),
-                        );
-                        return Err(err);
-                    }
-                }
+                // TODO: No errors should be encountered by removing this,
+                // however, we leave it as comment for now.
+
+                // if current == OPEN_CURLY_BRACKET {
+                //     curly_bracket_stack.push(OPEN_CURLY_BRACKET.to_owned());
+                // } else if current == CLOSE_CURLY_BRACKET {
+                //     let popped_bracket = curly_bracket_stack.pop();
+                //     if popped_bracket.is_none() {
+                //         let err = Error::ParsingError(
+                //             "There was a parsing Error: Expected a `}`, but did not find it."
+                //                 .to_owned(),
+                //         );
+                //         return Err(err);
+                //     }
+                // }
                 text.push_str(&current);
             } else {
                 if curly_bracket_stack.is_empty() {

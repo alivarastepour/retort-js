@@ -571,17 +571,23 @@ pub mod tokenizer_mod {
 
         next
     }
+
     #[cfg(test)]
+
+    /// Test module for `tokenizer` module's functionality.
+    ///
+    ///
+    /// Note that it is preferred to have tests and functionality in separate modules; however, this
+    /// would require to publicly interface ALL functionality of a module, which is not desired.
     mod tests {
-        use std::result;
 
         use crate::error::error_mod::Error;
         use crate::tokenizer::tokenizer_mod::{
-            proceed_from_uninitialized, update_starting_tag_index, update_starting_tag_name,
-            CurrentState, TokenizerState,
+            proceed_from_open_angle_bracket, proceed_from_uninitialized, update_starting_tag_index,
+            update_starting_tag_name, CurrentState, TokenizerState,
         };
 
-        use super::get_state_after_tag_name;
+        use super::{get_state_after_tag_name, read_key_of_prop};
 
         #[test]
         #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
@@ -835,6 +841,47 @@ pub mod tokenizer_mod {
                     assert!(false);
                 }
             }
+        }
+
+        #[test]
+        /// `proceed_from_open_angle_bracket` should return an `Err` variant if there is no non-empty character
+        /// after `<`.
+        ///
+        /// Note that this is the only scenario which is checked for `proceed_from_open_angle_bracket`, because
+        /// rest of its logic is basically tested. See test cases for `update_starting_tag_index`,
+        /// `get_state_after_tag_name` and `update_starting_tag_name`.
+        fn proceed_from_open_angle_bracket_empty() {
+            let markup_string = "< ";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 1usize;
+            let proceed_from_open_angle_bracket_result = proceed_from_open_angle_bracket(
+                &markup,
+                &mut index,
+                TokenizerState::OpenAngleBracket,
+            );
+            assert!(matches!(
+                proceed_from_open_angle_bracket_result,
+                Result::Err(err) if matches!(err, Error::ParsingError(_))
+            ))
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/20"]
+        fn read_key_of_prop_invalid() {
+            let markup_string = "<div id=";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let _ = read_key_of_prop(&mut index, &markup);
+            panic!();
+        }
+
+        #[test]
+        fn read_key_of_prop_valid() {
+            let markup_string = "<div id={\"hi\"}></div>";
+            let markup: Vec<char> = markup_string.chars().collect();
+            let mut index = 5usize;
+            let key = read_key_of_prop(&mut index, &markup);
+            assert!(key == "id=" && index == 7);
         }
     }
 }

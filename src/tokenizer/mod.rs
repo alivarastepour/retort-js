@@ -281,7 +281,9 @@ pub mod tokenizer_mod {
         let mut wrapper_stack: Vec<String> = Vec::new();
         loop {
             if *index == max {
-                break;
+                return Err(Error::ParsingError(
+                    "Expected a key-value pair, but reached the end of markup.".to_owned(),
+                ));
             }
             let mut current = markup[*index].to_string(); // todo: generalize this shit
             current = current.to_owned();

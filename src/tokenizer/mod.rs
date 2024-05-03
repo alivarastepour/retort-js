@@ -199,7 +199,7 @@ pub mod tokenizer_mod {
                     return Ok(res);
                 }
                 _ => {
-                    let err = Error::TypeError("This function shouldn't have been called with this variant of TokenizerState.".to_owned());
+                    let err = Error::TypeError("`get_state_after_tag_name` shouldn't have been called with this variant of `TokenizerState` as the caller; tokenizer reached a tag name without reaching `<` or `>` first.".to_owned());
                     return Err(err);
                 }
             }

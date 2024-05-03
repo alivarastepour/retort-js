@@ -93,9 +93,14 @@ pub mod tokenizer_mod {
         loop {
             if *index == max {
                 *index -= 1;
+                let state: TokenizerState = if text == "" {
+                    TokenizerState::Finalized
+                } else {
+                    TokenizerState::Text
+                };
                 let res = CurrentState {
-                    state: TokenizerState::Finalized,
-                    token: "".to_owned(),
+                    state,
+                    token: text.to_owned(),
                 };
                 return Ok(res);
             }
@@ -595,16 +600,13 @@ pub mod tokenizer_mod {
     /// would require to publicly interface ALL functionality of a module, which is not desired.
     mod tests {
 
-        use crate::error::error_mod::Error;
-        use crate::tokenizer::tokenizer_mod::{
-            proceed_from_open_angle_bracket, proceed_from_uninitialized, update_starting_tag_index,
-            update_starting_tag_name, CurrentState, TokenizerState,
-        };
-
         use super::{
             get_state_after_slash, get_state_after_tag_name, get_state_from_props,
-            proceed_from_name, read_key_of_prop, read_value_of_prop, tokenizer,
+            proceed_from_name, proceed_from_open_angle_bracket, proceed_from_uninitialized,
+            read_key_of_prop, read_value_of_prop, tokenizer, update_starting_tag_index,
+            update_starting_tag_name, CurrentState, TokenizerState,
         };
+        use crate::error::error_mod::Error;
 
         #[test]
         #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
@@ -634,7 +636,7 @@ pub mod tokenizer_mod {
             let CurrentState { state, token } =
                 proceed_from_uninitialized(&markup, &mut index).unwrap();
             match state {
-                TokenizerState::Finalized => {
+                TokenizerState::Text => {
                     assert!(token == markup_string && index == markup.len() - 1)
                 }
                 _ => {

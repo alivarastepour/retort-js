@@ -88,7 +88,7 @@ pub mod tokenizer_mod {
     ) -> Result<CurrentState, Error> {
         let max = markup.len();
         let mut text = String::from("");
-        let mut curly_bracket_stack: Vec<String> = Vec::new();
+        // let mut curly_bracket_stack: Vec<String> = Vec::new();
         update_starting_tag_index(index, max, markup);
         loop {
             if *index == max {
@@ -124,11 +124,11 @@ pub mod tokenizer_mod {
                 // }
                 text.push_str(&current);
             } else {
-                if curly_bracket_stack.is_empty() {
-                    return get_state_after_open_angle_bracket(text, index, markup);
-                } else {
-                    text.push_str(&current);
-                }
+                // if curly_bracket_stack.is_empty() {
+                return get_state_after_open_angle_bracket(text, index, markup);
+                // } else {
+                // text.push_str(&current);
+                // }
             }
             *index = *index + 1;
         }
@@ -233,6 +233,7 @@ pub mod tokenizer_mod {
 
         update_starting_tag_index(index, max, markup);
         if *index == max {
+            *index -= 1;
             let err =
                 Error::ParsingError("No tag name was found after open angle bracket.".to_owned());
             return Err(err);
@@ -251,6 +252,7 @@ pub mod tokenizer_mod {
         let mut key = String::from("");
         loop {
             if *index == max {
+                *index -= 1;
                 return Err(Error::ParsingError(
                     "Expected a key-value pair, but reached the end of markup.".to_owned(),
                 ));
@@ -286,6 +288,7 @@ pub mod tokenizer_mod {
         let mut wrapper_stack: Vec<String> = Vec::new();
         loop {
             if *index == max {
+                *index -= 1;
                 return Err(Error::ParsingError(
                     "Expected a key-value pair, but reached the end of markup.".to_owned(),
                 ));
@@ -609,7 +612,6 @@ pub mod tokenizer_mod {
         use crate::error::error_mod::Error;
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/12"]
         /// An empty markup, which is any markup that has no char other than whitespace, should
         /// make tokenization state to `Finalized`.
         fn test_empty_markup() {
@@ -628,7 +630,6 @@ pub mod tokenizer_mod {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/5"]
         fn test_text_markup() {
             let markup_string = "This is a plain test";
             let markup: Vec<char> = markup_string.chars().collect();
@@ -698,25 +699,6 @@ pub mod tokenizer_mod {
             match state {
                 TokenizerState::Text => {
                     assert!(token == "hello world" && index == 15)
-                }
-                _ => {
-                    assert!(false)
-                }
-            }
-        }
-
-        #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/13"]
-        /// This can be removed when issue is resolved.
-        fn test_curly_brackets() {
-            let markup_string = "<div>}hi</div> ";
-            let markup: Vec<char> = markup_string.chars().collect();
-            let mut index = 5usize;
-            let CurrentState { state, token } =
-                proceed_from_uninitialized(&markup, &mut index).unwrap();
-            match state {
-                TokenizerState::Text => {
-                    assert!(token == "}hi" && index == 7)
                 }
                 _ => {
                     assert!(false)
@@ -885,13 +867,14 @@ pub mod tokenizer_mod {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/20"]
         fn test_read_key_of_prop_invalid() {
-            let markup_string = "<div id=";
+            let markup_string = "<div id";
             let markup: Vec<char> = markup_string.chars().collect();
             let mut index = 5usize;
-            let _ = read_key_of_prop(&mut index, &markup);
-            panic!();
+            let read_key_of_prop_result = read_key_of_prop(&mut index, &markup);
+            assert!(
+                matches!(read_key_of_prop_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            )
         }
 
         #[test]

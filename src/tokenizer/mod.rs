@@ -142,7 +142,9 @@ pub mod tokenizer_mod {
     }
 
     /// Advances `index` to the end of tag name. It will update mutable references of both `index` and
-    /// `tag_name`
+    /// `tag_name`.This function assumes that `index` currently stands on starting
+    /// character of the tag name, which is a non-whitespace character; so the caller needs to have
+    /// called the `update_starting_tag_index` before calling this function.
     fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
         loop {
             let mut current = markup[*index].to_string();

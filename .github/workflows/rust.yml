@@ -1,0 +1,25 @@
+name: unit tests
+
+on:
+  push:
+    branches: [ "test" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: jetli/wasm-pack-action@v0.4.0
+      with:
+        version: 'latest'
+    # - name: Build
+    #   run: wasm-pack build --target web
+    - name: Run tests
+      run: cargo test --verbose

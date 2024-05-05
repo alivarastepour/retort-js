@@ -1,17 +1,17 @@
 pub mod component_mod {
-    use std::ops::Deref;
+    use std::{collections::HashMap, ops::Deref};
 
     use crate::{
-        dom::dom_mod::construct_dom_wrapper, error::error_mod::Error as CustomError,
-        parser::parser_mod::VirtualNode,
+        dom::dom_mod::construct_dom_wrapper,
+        error::error_mod::Error as CustomError,
+        parser::parser_mod::{NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
-    use serde_json::{from_str, to_string, Error, Map, Value};
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{
-        console::{log_1, time, time_end},
-        js_sys::Function,
+        console::log_1,
+        js_sys::{Function, JSON},
     };
 
     use crate::{
@@ -28,9 +28,6 @@ pub mod component_mod {
         component_did_mount: Function,
         vdom: Box<VirtualNode>,
     }
-
-    const NO_VALUE: &str = "undefined";
-    const OBJ: &str = "[object]";
 
     impl Clone for Component {
         fn clone(&self) -> Self {
@@ -58,31 +55,26 @@ pub mod component_mod {
         pub fn get_props<'a>(&'a self) -> &'a String {
             return &self.props;
         }
+
+        pub fn set_vdom(&mut self, v_node: &VirtualNode) {
+            self.vdom = Box::new(v_node.clone());
+        }
     }
 
     #[wasm_bindgen]
     impl Component {
         #[wasm_bindgen(constructor)]
-        pub async fn new(
-            state: String,
-            presenter: String,
-            component_did_mount: &Function,
-        ) -> Component {
-            // let state: Result<Value, Error> = from_str(&state);
-            // if let Result::Err(err) = state {
-            //     panic!("could not convert it: {err}");
-            // }
-            let virtual_node_result: Result<VirtualNode, CustomError> =
-                Self::create_component_vdom(presenter.clone()).await;
-            if let Result::Err(err) = virtual_node_result {
-                panic!("");
-            }
+        pub fn new(state: String, presenter: String, component_did_mount: &Function) -> Component {
             Component {
                 state,
                 presenter,
                 props: "{}".to_owned(),
                 component_did_mount: component_did_mount.clone(),
-                vdom: Box::new(virtual_node_result.unwrap()),
+                vdom: Box::new(VirtualNode {
+                    attributes: HashMap::new(),
+                    children: Vec::new(),
+                    node_type: NodeType::Tag(" ".to_owned()),
+                }),
             }
         }
 
@@ -108,33 +100,15 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen(getter)]
-        pub fn state(&self) -> String {
-            to_string(&self.state).unwrap()
+        pub fn state_parsed(&self) -> JsValue {
+            // TODO:: observe usages of state property and their types, remove extra functionalities
+            JSON::parse(&self.state).unwrap_or(JsValue::null())
         }
 
-        // #[wasm_bindgen(setter)]
-        // pub fn set_state(&mut self, state: String) {
-        //     // TODO: generalize this repeated code
-        //     let deserialized_state: Result<Value, Error> = from_str(&state);
-        //     if let Result::Err(err) = deserialized_state {
-        //         panic!("could not convert it: {err}");
-        //     }
-        //     self.state = deserialized_state.unwrap();
-        // }
-
-        /*
-         note the importance of &mut self parameter. although it sounds implicit, removing it will
-        forbid you to use it in Javascript.
-        */
-        // #[wasm_bindgen]
-        // pub fn set_state_wrapper(&mut self, state: String) {
-        //     let deserialized_state: Result<Value, Error> = from_str(&state);
-        //     if let Result::Err(err) = deserialized_state {
-        //         panic!("could not convert it: {err}");
-        //     }
-        //     let new_state = deserialized_state.unwrap();
-        //     self.state = new_state;
-        // }
+        #[wasm_bindgen(getter)]
+        pub fn state(&self) -> String {
+            self.state.clone()
+        }
 
         #[wasm_bindgen(getter)]
         pub fn props(&self) -> String {
@@ -156,170 +130,80 @@ pub mod component_mod {
             self.presenter = presenter;
         }
 
-        fn obj_key_path_to_value(map: Map<String, Value>, path: String) -> String {
-            let mut mp = map.clone();
+        #[wasm_bindgen]
+        /// Updates the `state` of a component which this function is called with, using a callback function.
+        /// provided callback is called with component's current `state` as an argument, allowing user to
+        /// return the component's next `state` accordingly.
+        pub fn set_state(&mut self, callback: Function) {
+            let state_js_value = self.state_parsed();
+            let new_state_result = callback.call1(&JsValue::undefined(), &state_js_value);
+            if new_state_result.is_err() {
+                let msg_js_value = new_state_result.as_ref().unwrap_err();
+                let msg = JsValue::as_string(&msg_js_value).unwrap_or(String::from(
+                    "Error occurred while setting the state of component.",
+                ));
+            }
+            let new_state = new_state_result.unwrap();
+            let new_state_string = JSON::stringify(&new_state).unwrap();
+            self.state = new_state_string.into();
+        }
 
-            let mut iterator = path.split('.');
-            let temp_iterator = iterator.clone();
-            let iterator_vec: &Vec<&str> = &temp_iterator.collect();
+        /// Given a component object, parses its presenter using the `parse_presenter` function and then
+        /// constructs a `VirtualNode` from its result, which corresponds to the current component's
+        /// markup structure. An `Ok` variant is returned if nothing goes wrong, `Err` variant otherwise,
+        /// explaining what went wrong.
+        async fn create_vdom(component: &mut Component) -> Result<(), CustomError> {
+            let presenter = &component.presenter;
+            let parsed_presenter_result = parse_presenter(presenter);
+            if let Result::Err(err) = parsed_presenter_result {
+                return Err(err);
+            }
+            let parsed_presenter = parsed_presenter_result.unwrap();
 
-            let len = iterator_vec.len();
-            let mut current = 1;
+            let vdom_result = parse_vdom_from_string(&parsed_presenter).await;
 
-            let val: String = loop {
-                let val = iterator.next();
-                match val {
-                    Option::None => {
-                        break NO_VALUE.to_string();
-                    }
-                    Option::Some(v) => {
-                        let map_item = mp.get(v);
-                        match map_item {
-                            Option::None => {
-                                break NO_VALUE.to_string();
-                            }
-                            Option::Some(value_pair) => match value_pair {
-                                Value::String(st) => {
-                                    if current == len {
-                                        break st.to_string();
-                                    } else {
-                                        break NO_VALUE.to_string();
-                                    }
-                                }
-                                Value::Object(mx) => {
-                                    if current == len {
-                                        break OBJ.to_string();
-                                    } else {
-                                        mp = mx.clone();
-                                    }
-                                }
-                                Value::Number(nb) => {
-                                    if current == len {
-                                        break nb.to_string();
-                                    } else {
-                                        break NO_VALUE.to_string();
-                                    }
-                                }
-                                Value::Null => {
-                                    break NO_VALUE.to_string();
-                                }
-                                Value::Bool(bl) => {
-                                    if current == len {
-                                        break bl.to_string();
-                                    } else {
-                                        break NO_VALUE.to_string();
-                                    }
-                                }
-                                Value::Array(_) => {
-                                    break OBJ.to_string();
-                                }
-                            },
-                        }
-                    }
-                }
-                current += 1;
-            };
-            val
+            if let Result::Err(err) = vdom_result {
+                return Err(err);
+            }
+            let virtual_node = vdom_result.unwrap();
+            component.set_vdom(&virtual_node);
+
+            Ok(())
         }
 
         #[wasm_bindgen]
-        pub fn register_event_listener(
-            id: &str,
-            event_type: &str,
-            event_listener: &Function,
-        ) -> bool {
-            let window = web_sys::window().expect("where window?");
-            let document = window.document().expect("where document?");
-            let target = document.get_element_by_id(id).expect("where target?");
-            let result = target.add_event_listener_with_callback(event_type, event_listener);
-            match result {
-                Result::Err(_err) => false,
-                Result::Ok(_v) => true,
+        /// An async wrapper for calling the `Self::create_vdom(self)`.
+        pub async fn render(&mut self) -> Component {
+            let vdom_creation_result = Self::create_vdom(self).await;
+            if vdom_creation_result.is_err() {
+                let err = vdom_creation_result.unwrap_err();
+                match err {
+                    CustomError::TypeError(e) => {
+                        log_1(&JsValue::from_str(&e));
+                    }
+                    CustomError::SerdeWasmBindgenError(e) => {
+                        let a = e.to_string();
+                        log_1(&JsValue::from_str(&a));
+                    }
+                    CustomError::ResolveError(e) => {
+                        log_1(&JsValue::from_str(&e));
+                    }
+                    _ => {
+                        log_1(&JsValue::from_str("others"));
+                    }
+                }
             }
+            return self.clone();
         }
 
-        async fn create_component_vdom(presenter: String) -> Result<VirtualNode, CustomError> {
-            let res = parse_presenter(&presenter);
-            if let Result::Err(err) = res {
-                return Err(err);
-            }
-            let res = res.unwrap();
-            let virtual_node_result = parse_vdom_from_string(res).await;
-            if let Result::Err(err) = virtual_node_result {
-                return Err(err);
-            }
-            let virtual_node = virtual_node_result.unwrap();
-            let a = to_value(&virtual_node).unwrap();
-            log_1(&a);
-            Ok(virtual_node)
-
-            // NOTE: comments are some what deprecated but not removed because they still provide road map
-
-            // read content of above line's file
-            // parse the markup, look for component imports
-            // add the markup to vdom structure as is, transform modules imported from module_resolver to Component struct
-            // after that, add components to the vdom of current component as is, then call this function on the newly created components.
-            // after the execution of this function finalizes, vdom structure of all components should be prepared
-            // and we are ready to create its unified version.
-        }
-
-        /// NOTE: comments are some what deprecated but not removed because they still provide road map
-
-        // 1- mount should be called on a root node
-        // 2- add a root field to component struct to determine if it has permission to call mount(optional)
-        // 3- mount is called with a reference to the root component
-        // 4- it calls the TBD function in JS that creates VDOM for components.
-        // 5- the JS function should look for path field in component, which represents where the actual markup resides.
-        // 6- the JS function should parse that file to create VDOM.
-        // 7- the JS function should look for imports should it reach a component call
-        // 8- for know, the info of the component is stored in VDOM, not what it returns. we are not making a unified VDOM at this stage.
-        // 9- after all markup is parsed and VDOM for each component is created, it's about time to make VDOM objects to DOM nodes.
-        // 10- at this point, we should again come back to the mount function, and start from the component which mount was called on.
-        // 11- this time we are trying to make a unified VDOM first, so we will start from root, and add only markup to the VDOM.
-        // 12- this means that we will ask components to return what their child components actually return(with state and stuff).
-        // 13- this process created a unified VDOM.
-        // 14- from here we can start creating the actual DOM.
-        // 15- I suspect if need to keep this initially created unified VDOM, since we will only work with component updates from here on, and we have VDOM of each component
-        async fn create_vdom(component: &mut Component) -> Result<VirtualNode, CustomError> {
-            let presenter = &component.presenter;
-            let res = parse_presenter(presenter);
-            if let Result::Err(err) = res {
-                return Err(err);
-            }
-            let res = res.unwrap();
-            let x = parse_vdom_from_string(res).await;
-
-            if let Result::Err(err) = x {
-                return Err(err);
-            }
-            let virtual_node = x.unwrap();
-            Ok(virtual_node)
-
-            // read content of above line's file
-            // parse the markup, look for component imports
-            // add the markup to vdom structure as is, transform modules imported from module_resolver to Component struct
-            // after that, add components to the vdom of current component as is, then call this function on the newly created components.
-            // after the execution of this function finalizes, vdom structure of all components should be prepared
-            // and we are ready to create its unified version.
-
-            // this function is called with the root node.
-            // in the root node's object, we have access to all components' vdom structure.
-            // the vdom structure currently contains tag nodes, text nodes and component nodes.
-            // we can't render a component node; that is meaningless. so in order to create a representation
-            // that is convertible to DOM, we need to do the following:
-            // 1- access the vdom of root node.
-            // 2- traverse through its vdom field.
-            // 3- Text and Tag variants of `node_type` should be left as is(do what with them?).
-            // 4- Component variants though, must be replaced with what they "return".
-            // 5-
-        }
-
+        #[wasm_bindgen]
+        /// constructs the DOM from a given entry point. This should be called from the component
+        /// that wraps the entire component tree, otherwise a subtree of components will be added to DOM.
         pub fn mount(&mut self) {
-            time();
             let res = construct_dom_wrapper(&self);
-            // self.component_did_mount.call0(&JsValue::undefined());
-            // self.call_component_did_mount();
-            time_end();
+            if res.is_err() {
+                panic!("")
+            }
         }
     }
 }

@@ -34,6 +34,8 @@ pub mod parser_mod {
     /// A wrapper function that calls the `module_resolver` function which is defined in Javascript.
     /// The resolved value of a call to `module_resolver` is supposedly a `Component` object;
     /// if it was, an `Ok` variant is returned which contains the `Component` object, `Err` otherwise.
+    /// Note that except for the root component, other modules which contain exported `Component` objects
+    /// rely on being called from here; other than that, they won't be executed at all.
     pub async fn call_module_resolver(path: &str) -> Result<Component, CustomError> {
         let path = path.replace("\"", "").replace(";", "");
         let promise = module_resolver(&path);
@@ -70,30 +72,14 @@ pub mod parser_mod {
         return Err(CustomError::ParsingError(msg));
     }
 
-    /// This is a hack to remove extra chars that wrap literal values;
-    /// if value in prop is not a literal, it is returned unmodified.
-    // fn custom_trim(value: &String) -> String {
-    //     let trimmed_value = value.trim();
-    //     if value.starts_with("{") && value.ends_with("}") {
-    //         let value = &trimmed_value[1..trimmed_value.len() - 1]; // dive: why does this expression resolve to
-    //                                                                 //  a value of type str instead of &str if & was removed
-    //         let trimmed_value = value.trim();
-    //         if value.starts_with("\"") && value.ends_with("\"") {
-    //             let value = &trimmed_value[1..trimmed_value.len() - 1];
-    //             return value.to_owned();
-    //         }
-    //     }
-    //     return value.to_owned();
-    // }
-
     /// Given an object of type `ParsedPresenter`, constructs a vdom using the `tokenizer` module.
     /// If an error is encountered, an `Err` variant is returned explaining why; `Ok` otherwise,
     /// which contains a `VirtualNode` object.
     pub async fn parse_vdom_from_string(
-        parsed_file: ParsedPresenter,
+        parsed_file: &ParsedPresenter,
     ) -> Result<VirtualNode, CustomError> {
         let ParsedPresenter { imports, markup } = parsed_file;
-        let mut get_next_token = tokenizer(markup);
+        let mut get_next_token = tokenizer(markup.to_owned());
         let mut stack: Vec<VirtualNode> = Vec::new();
         let mut stack_size: usize = 0;
         let mut vdom: Vec<VirtualNode> = Vec::new();
@@ -170,9 +156,6 @@ pub mod parser_mod {
                     let owner_node = stack.get_mut(stack_size - 1).unwrap();
                     let attrs = &mut owner_node.attributes;
                     let key_value_split = token.split_once("=").unwrap();
-                    // let key = key_value_split.next().unwrap().to_owned();
-                    // let value = key_value_split.next().unwrap().to_owned();
-                    // let value = custom_trim(&value);
                     attrs.insert(key_value_split.0.to_owned(), key_value_split.1.to_owned());
                 }
                 TokenizerState::SelfClosingAngleBracket => {

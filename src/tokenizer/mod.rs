@@ -11,7 +11,7 @@ pub mod tokenizer_mod {
     const OPEN_CURLY_BRACKET: &str = "{";
     const CLOSE_CURLY_BRACKET: &str = "}";
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     pub enum TokenizerState {
         Uninitialized,
         OpenAngleBracket,        // <
@@ -26,7 +26,7 @@ pub mod tokenizer_mod {
         Finalized,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub struct CurrentState {
         pub state: TokenizerState,
         pub token: String,

@@ -603,12 +603,7 @@ pub mod tokenizer_mod {
     /// would require to publicly interface ALL functionality of a module, which is not desired.
     mod tests {
 
-        use super::{
-            get_state_after_slash, get_state_after_tag_name, get_state_from_props,
-            proceed_from_name, proceed_from_open_angle_bracket, proceed_from_uninitialized,
-            read_key_of_prop, read_value_of_prop, tokenizer, update_starting_tag_index,
-            update_starting_tag_name, CurrentState, TokenizerState,
-        };
+        use super::*;
         use crate::error::error_mod::Error;
 
         #[test]

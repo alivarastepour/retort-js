@@ -1016,49 +1016,142 @@ pub mod tokenizer_mod {
 
         #[test]
         fn tokenizer_test_2() {
-            let expected_arr: Vec<CurrentState> = vec![
-                CurrentState {
-                    state: TokenizerState::Uninitialized,
-                    token: String::from("<"),
-                },
-                CurrentState {
-                    token: String::from("div"),
-                    state: TokenizerState::TagNameOpen,
-                },
-                CurrentState {
-                    token: String::from("data-source={\"root\"}"),
-                    state: TokenizerState::Props,
-                },
-                CurrentState {
-                    token: String::from("render-if={12+2==14}"),
-                    state: TokenizerState::Props,
-                },
-                CurrentState {
-                    token: String::from(""),
-                    state: TokenizerState::CloseAngleBracket,
-                },
-                CurrentState {
-                    state: TokenizerState::Uninitialized,
-                    token: String::from("<"),
-                },
-            ];
             let markup = String::from("<div data-source={\"root\"} render-if={12+2==14}>
             <span data-source={\"hi\"}>hi</span>
-            <p>
               <img
               width={100} height={100} alt={2 + 2 == 4 ?   1 :0}/>
               <span style={\"color:red;font-size:2rem;font-family:sans-serif;padding:3rem\"}>hello world</span>
-            </p>
             </div> ");
+            let expected_arr: Vec<CurrentState> = vec![
+                CurrentState {
+                    state: TokenizerState::OpenAngleBracket,
+                    token: String::from("<"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameOpen,
+                    token: String::from("div"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from("data-source={\"root\"}"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from("render-if={12+2==14}"),
+                },
+                CurrentState {
+                    state: TokenizerState::CloseAngleBracket,
+                    token: String::from(">"),
+                },
+                CurrentState {
+                    state: TokenizerState::OpenAngleBracket,
+                    token: String::from("<"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameOpen,
+                    token: String::from("span"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from("data-source={\"hi\"}"),
+                },
+                CurrentState {
+                    state: TokenizerState::CloseAngleBracket,
+                    token: String::from(">"),
+                },
+                CurrentState {
+                    state: TokenizerState::Text,
+                    token: String::from("hi"),
+                },
+                CurrentState {
+                    state: TokenizerState::ClosingAngleBracket,
+                    token: String::from("</"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameClose,
+                    token: String::from("span"),
+                },
+                CurrentState {
+                    state: TokenizerState::CloseAngleBracket,
+                    token: String::from(">"),
+                },
+                CurrentState {
+                    state: TokenizerState::OpenAngleBracket,
+                    token: String::from("<"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameOpen,
+                    token: String::from("img"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from("width={100}"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from("height={100}"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from("alt={2 + 2 == 4 ?   1 :0}"),
+                },
+                CurrentState {
+                    state: TokenizerState::SelfClosingAngleBracket,
+                    token: String::from("/>"),
+                },
+                CurrentState {
+                    state: TokenizerState::OpenAngleBracket,
+                    token: String::from("<"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameOpen,
+                    token: String::from("span"),
+                },
+                CurrentState {
+                    state: TokenizerState::Props,
+                    token: String::from(
+                        "style={\"color:red;font-size:2rem;font-family:sans-serif;padding:3rem\"}",
+                    ),
+                },
+                CurrentState {
+                    state: TokenizerState::CloseAngleBracket,
+                    token: String::from(">"),
+                },
+                CurrentState {
+                    state: TokenizerState::Text,
+                    token: String::from("hello world"),
+                },
+                CurrentState {
+                    state: TokenizerState::ClosingAngleBracket,
+                    token: String::from("</"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameClose,
+                    token: String::from("span"),
+                },
+                CurrentState {
+                    state: TokenizerState::CloseAngleBracket,
+                    token: String::from(">"),
+                },
+                CurrentState {
+                    state: TokenizerState::ClosingAngleBracket,
+                    token: String::from("</"),
+                },
+                CurrentState {
+                    state: TokenizerState::TagNameClose,
+                    token: String::from("div"),
+                },
+                CurrentState {
+                    state: TokenizerState::CloseAngleBracket,
+                    token: String::from(">"),
+                },
+            ];
             let mut generator = tokenizer(markup);
             for expected in expected_arr {
-                let actual = generator();
-                if actual.is_err() {
-                    assert!(false)
-                }
-                let actual = actual.unwrap();
-                // assert!(matches!(actual.state, expected.state))
-                if actual == expected {}
+                let actual_result = generator();
+                assert!(actual_result.is_ok());
+                let actual = actual_result.unwrap();
+                assert!(actual == expected);
             }
         }
     }

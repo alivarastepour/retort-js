@@ -1014,5 +1014,53 @@ pub mod tokenizer_mod {
                 }
             }
         }
+
+        #[test]
+        fn tokenizer_test_2() {
+            let expected_arr: Vec<CurrentState> = vec![
+                CurrentState {
+                    state: TokenizerState::Uninitialized,
+                    token: String::from("<"),
+                },
+                CurrentState {
+                    token: String::from("div"),
+                    state: TokenizerState::TagNameOpen,
+                },
+                CurrentState {
+                    token: String::from("data-source={\"root\"}"),
+                    state: TokenizerState::Props,
+                },
+                CurrentState {
+                    token: String::from("render-if={12+2==14}"),
+                    state: TokenizerState::Props,
+                },
+                CurrentState {
+                    token: String::from(""),
+                    state: TokenizerState::CloseAngleBracket,
+                },
+                CurrentState {
+                    state: TokenizerState::Uninitialized,
+                    token: String::from("<"),
+                },
+            ];
+            let markup = String::from("<div data-source={\"root\"} render-if={12+2==14}>
+            <span data-source={\"hi\"}>hi</span>
+            <p>
+              <img
+              width={100} height={100} alt={2 + 2 == 4 ?   1 :0}/>
+              <span style={\"color:red;font-size:2rem;font-family:sans-serif;padding:3rem\"}>hello world</span>
+            </p>
+            </div> ");
+            let mut generator = tokenizer(markup);
+            for expected in expected_arr {
+                let actual = generator();
+                if actual.is_err() {
+                    assert!(false)
+                }
+                let actual = actual.unwrap();
+                // assert!(matches!(actual.state, expected.state))
+                if actual == expected {}
+            }
+        }
     }
 }

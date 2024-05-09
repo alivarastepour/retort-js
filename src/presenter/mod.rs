@@ -46,7 +46,7 @@ pub mod presenter_mod {
         let mut imports: HashMap<String, String> = HashMap::new();
         let mut markup: Vec<String> = Vec::new();
         for line in split_presenter {
-            if line.starts_with("import") && !in_markup {
+            if line.trim().starts_with("import") && !in_markup {
                 let read_import_result = read_imports(line.to_owned(), &mut imports);
                 if let Result::Err(err) = read_import_result {
                     return Err(err);
@@ -65,6 +65,8 @@ pub mod presenter_mod {
 
     #[cfg(test)]
     mod tests {
+        use regex::Regex;
+
         use super::*;
 
         #[test]
@@ -109,50 +111,47 @@ pub mod presenter_mod {
         /// Given a correct import statement, `read_imports` should update the `imports` mutable
         /// reference with a key of the name of the component and a value of the path to the component.
         fn test_read_imports() {
-            let line = String::from("import Hello from \"/some/path\"");
+            let line = String::from("import Hello from \"/some/path\";");
             let mut imports: HashMap<String, String> = HashMap::new();
             let read_imports_result = read_imports(line, &mut imports);
             assert!(
                 matches!(read_imports_result, Ok(_))
                     && imports.len() == 1
-                    && imports["Hello"] == "\"/some/path\""
+                    && imports["Hello"] == "\"/some/path\";"
             );
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/27"]
+        /// `parse_presenter` must return splitted markup and imports if presenter format is
+        /// correct.
         fn test_parse_presenter() {
-            let presenter = String::from(
-                "
-            import ByeWorld from \"/test/ByeWorld/ByeWorld.js\";
-            import Hello from \"/test/Hello/Hello.js\";
-
-
+            let pre_markup = "
             <div>
                 <div id={state.x[0].name + \"_\" + state.x[2].name}>
                     <div>hi!</div>
                     <ByeWorld />
                 </div>
                 <Hello />
-            </div>
+            </div>";
+            let mut presenter = String::from(
+                "
+            import ByeWorld from \"/test/ByeWorld/ByeWorld.js\";
+            import Hello from \"/test/Hello/Hello.js\";
             ",
             );
+            presenter.push_str(pre_markup);
 
             let parsed_presenter_result = parse_presenter(&presenter);
             if parsed_presenter_result.is_ok() {
                 let ParsedPresenter { markup, imports } = parsed_presenter_result.unwrap();
+                let re = Regex::new(r#"(\s)|(\n)"#).unwrap();
+                let actual = re.replace_all(&markup, "").to_string();
+                let expected = re.replace_all(&pre_markup, "").to_string();
                 assert!(
                     imports.len() == 2
-                        && imports["ByeWorld"] == "\"/test/ByeWorld/ByeWorld.js\""
-                        && imports["Hello"] == "\"/test/Hello/Hello.js\""
-                        && markup
-                            == "            <div>
-                            <div id={state.x[0].name + \"_\" + state.x[2].name}>
-                                <div>hi!</div>
-                                <ByeWorld />
-                            </div>
-                            <Hello />
-                        </div>"
+                        && imports["ByeWorld"] == "\"/test/ByeWorld/ByeWorld.js\";"
+                        && imports["Hello"] == "\"/test/Hello/Hello.js\";"
+                        && actual == expected
                 )
             } else {
                 assert!(false);

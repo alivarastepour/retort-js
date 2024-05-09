@@ -55,7 +55,6 @@ pub mod js_evaluator {
             let temp_js_value = temp_js_value_result.unwrap();
             let resolve_result =
                 evaluator.call2(&JsValue::undefined(), &temp_js_value, &temp_js_value);
-            console_log!("{:?}", resolve_result);
 
             assert!(matches!(resolve_result, Ok(_)));
 

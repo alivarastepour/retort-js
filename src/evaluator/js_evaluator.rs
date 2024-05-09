@@ -31,4 +31,36 @@ pub mod js_evaluator {
             function_body,
         )
     }
+
+    #[cfg(test)]
+    mod tests {
+        use serde_wasm_bindgen::to_value;
+        use wasm_bindgen::JsValue;
+        use wasm_bindgen_test::*;
+
+        use super::*;
+
+        wasm_bindgen_test_configure!(run_in_browser);
+
+        #[wasm_bindgen_test]
+        /// tests correctness of the function which is returned from `get_state_props_evaluator` using
+        /// `state` parameter.
+        fn test_get_state_props_evaluator() {
+            let expression = String::from("`${state.name} is ${state.age} years old.`");
+            let evaluator = get_state_props_evaluator(expression);
+
+            let temp_js_value_result = to_value("{\"age\":12, \"name\":\"ali\"}");
+            assert!(matches!(temp_js_value_result, Ok(_)));
+
+            let temp_js_value = temp_js_value_result.unwrap();
+            let resolve_result =
+                evaluator.call2(&JsValue::undefined(), &temp_js_value, &temp_js_value);
+            console_log!("{:?}", resolve_result);
+
+            assert!(matches!(resolve_result, Ok(_)));
+
+            let result = resolve_result.unwrap();
+            assert!(matches!(result.as_string(), Some(val) if val == "ali is 12 years old."))
+        }
+    }
 }

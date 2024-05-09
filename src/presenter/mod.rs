@@ -64,4 +64,100 @@ pub mod presenter_mod {
 
         Ok(ParsedPresenter { imports, markup })
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        #[ignore = "I don't know if such functions should be tested; producing the output is essentially regenerating the same function :D"]
+        fn test_trim_markup() {
+            assert!(true)
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/26"]
+        fn test_read_imports_invalid_format_1() {
+            let line = String::from("from x import z");
+            let mut imports: HashMap<String, String> = HashMap::new();
+            let read_imports_result = read_imports(line, &mut imports);
+            assert!(matches!(read_imports_result, Ok(())));
+        }
+
+        #[test]
+        /// `read_imports` should return error when encounters a wrong format of importing.
+        fn test_read_imports_invalid_format_2() {
+            let line = String::from("improt Hello form \"/some/path\"");
+            let mut imports: HashMap<String, String> = HashMap::new();
+            let read_imports_result = read_imports(line, &mut imports);
+            assert!(
+                matches!(read_imports_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            );
+        }
+
+        #[test]
+        /// `read_imports` must return error when import statement uses named imports.
+        fn test_read_imports_named_imports() {
+            let line = String::from("import {Hello} from \"/some/path\"");
+            let mut imports: HashMap<String, String> = HashMap::new();
+            let read_imports_result = read_imports(line, &mut imports);
+            assert!(
+                matches!(read_imports_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            );
+        }
+
+        #[test]
+        /// Given a correct import statement, `read_imports` should update the `imports` mutable
+        /// reference with a key of the name of the component and a value of the path to the component.
+        fn test_read_imports() {
+            let line = String::from("import Hello from \"/some/path\"");
+            let mut imports: HashMap<String, String> = HashMap::new();
+            let read_imports_result = read_imports(line, &mut imports);
+            assert!(
+                matches!(read_imports_result, Ok(_))
+                    && imports.len() == 1
+                    && imports["Hello"] == "\"/some/path\""
+            );
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/27"]
+        fn test_parse_presenter() {
+            let presenter = String::from(
+                "
+            import ByeWorld from \"/test/ByeWorld/ByeWorld.js\";
+            import Hello from \"/test/Hello/Hello.js\";
+
+
+            <div>
+                <div id={state.x[0].name + \"_\" + state.x[2].name}>
+                    <div>hi!</div>
+                    <ByeWorld />
+                </div>
+                <Hello />
+            </div>
+            ",
+            );
+
+            let parsed_presenter_result = parse_presenter(&presenter);
+            if parsed_presenter_result.is_ok() {
+                let ParsedPresenter { markup, imports } = parsed_presenter_result.unwrap();
+                assert!(
+                    imports.len() == 2
+                        && imports["ByeWorld"] == "\"/test/ByeWorld/ByeWorld.js\""
+                        && imports["Hello"] == "\"/test/Hello/Hello.js\""
+                        && markup
+                            == "            <div>
+                            <div id={state.x[0].name + \"_\" + state.x[2].name}>
+                                <div>hi!</div>
+                                <ByeWorld />
+                            </div>
+                            <Hello />
+                        </div>"
+                )
+            } else {
+                assert!(false);
+            }
+        }
+    }
 }

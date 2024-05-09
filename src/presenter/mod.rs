@@ -12,14 +12,13 @@ pub mod presenter_mod {
     /// if import format is correct and returns `Ok`; else, returns the `Err` variant with an explanation.
     fn read_imports(line: String, imports: &mut HashMap<String, String>) -> Result<(), Error> {
         let original_line = line.clone();
-        let line = line.replace("import", "").replace("from", "");
         let line_parts: Vec<String> = line.split_whitespace().map(|x| x.to_owned()).collect();
-        if line_parts.len() != 2 {
+        if line_parts.len() != 4 || line_parts[0] != "import" || line_parts[2] != "from" {
             let error_msg = format!("Import format is wrong; make sure your import statement matches the following format: `import Component from \"/path/to/component\"`. You provided: {original_line}.");
             return Err(Error::ParsingError(error_msg));
         }
-        let component = line_parts[0].to_owned();
-        let path = line_parts[1].to_owned();
+        let component = line_parts[1].to_owned();
+        let path = line_parts[3].to_owned();
         if component.starts_with('{') || component.ends_with('}') {
             let error_msg = "Import format is wrong; you are most likely using named imports while currently only default exports are supported.".to_owned();
             return Err(Error::ParsingError(error_msg));
@@ -75,12 +74,13 @@ pub mod presenter_mod {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/26"]
         fn test_read_imports_invalid_format_1() {
             let line = String::from("from x import z");
             let mut imports: HashMap<String, String> = HashMap::new();
             let read_imports_result = read_imports(line, &mut imports);
-            assert!(matches!(read_imports_result, Ok(())));
+            assert!(
+                matches!(read_imports_result, Err(err) if matches!(err, Error::ParsingError(_)))
+            );
         }
 
         #[test]

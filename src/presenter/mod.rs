@@ -64,4 +64,24 @@ pub mod presenter_mod {
 
         Ok(ParsedPresenter { imports, markup })
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        #[ignore = "I don't know if such functions should be tested; producing the output is essentially regenerating the same function :D"]
+        fn test_trim_markup() {
+            assert!(true)
+        }
+
+        #[test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/26"]
+        fn test_read_imports() {
+            let line = String::from("from x import z");
+            let mut imports: HashMap<String, String> = HashMap::new();
+            let read_imports_result = read_imports(line, &mut imports);
+            assert!(matches!(read_imports_result, Ok(())));
+        }
+    }
 }

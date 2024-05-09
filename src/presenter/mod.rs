@@ -28,8 +28,7 @@ pub mod presenter_mod {
         return Ok(());
     }
 
-    /// This function essentially updates the `markup` Vector if a markup line is not entirely made
-    /// of whitespace chars.
+    /// Removes any line which contains nothing but whitespace characters.
     fn trim_markup(markup: Vec<String>) -> String {
         let mut res = String::from("");
         for line in markup {

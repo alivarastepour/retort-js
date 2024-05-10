@@ -1,5 +1,5 @@
 pub mod component_mod {
-    use std::{collections::HashMap, iter::Map, ops::Deref};
+    use std::{collections::HashMap, ops::Deref};
 
     use crate::{
         dom::dom_mod::construct_dom_wrapper,
@@ -7,10 +7,10 @@ pub mod component_mod {
         parser::parser_mod::{NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
-    use serde_wasm_bindgen::to_value;
+    use serde_wasm_bindgen::{from_value, to_value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{
-        console::{log, log_1},
+        console::{time, time_end},
         js_sys::{Array, Function, JSON},
     };
 
@@ -67,6 +67,27 @@ pub mod component_mod {
             let arr = &self.effects;
             let iter_arr = &arr.clone().into_iter();
             iter_arr.clone().collect()
+        }
+
+        pub fn set_state_with_value(&mut self, new_state: JsValue) -> Result<(), CustomError> {
+            let stringified_state = JSON::stringify(&new_state);
+            if stringified_state.is_err() {
+                let error = stringified_state.unwrap_err();
+                let msg: String = from_value(error).unwrap_or(String::from(
+                    "Invalid object format caused JSON::stringify to fail.",
+                ));
+                return Err(CustomError::TypeError(msg));
+            }
+
+            let new_state_string_result = stringified_state.unwrap().as_string();
+            if new_state_string_result.is_none() {
+                return Err(CustomError::TypeError(String::from(
+                    "Failed to parse JsString into String.",
+                )));
+            }
+            let new_state = new_state_string_result.unwrap();
+            self.state = new_state;
+            Ok(())
         }
     }
 
@@ -157,6 +178,7 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen]
+        /// adds the provided callback to component's effects list.
         pub fn register_effect(&mut self, callback: Function) {
             let prev = &self.effects;
             let new = vec![callback];
@@ -164,7 +186,12 @@ pub mod component_mod {
             self.set_effects(prev.concat(&new_array));
         }
 
-        fn set_state_inner(&self, prev_state: &JsValue, callback: Function) -> Result<String, ()> {
+        /// Implementation details of setting state of a component.
+        fn set_state_inner(
+            &mut self,
+            prev_state: &JsValue,
+            callback: Function,
+        ) -> Result<(), CustomError> {
             let new_state_result = callback.call1(&JsValue::undefined(), &prev_state);
             if new_state_result.is_err() {
                 let msg_js_value = new_state_result.as_ref().unwrap_err();
@@ -172,59 +199,74 @@ pub mod component_mod {
                     "Error occurred while setting the state of component.",
                 ));
                 let error = CustomError::EvaluationError(msg);
-                error_handler(error);
+                return Err(error);
             }
             let new_state = new_state_result.unwrap();
-            let new_state_string = JSON::stringify(&new_state).unwrap();
-            // self.state = new_state_string.into();
-            Ok(new_state_string.into())
+            let set_state_result = self.set_state_with_value(new_state);
+            if set_state_result.is_err() {
+                return Err(set_state_result.unwrap_err());
+            }
+            Ok(())
         }
 
-        fn run_effects(effects: Vec<JsValue>, prev_state: &JsValue, prev_props: &JsValue) {
-            // let effects = self.effect_arr_into_vec();
-            let effects_call_result_arr: Vec<Result<JsValue, JsValue>> = effects
-                .into_iter()
-                .map(|f| Into::<Function>::into(f))
-                .map(|f| f.call2(&JsValue::undefined(), prev_props, prev_state))
-                .collect();
-            for item in effects_call_result_arr {
-                if item.is_err() {
-                    let err = item.unwrap_err();
-                    log_1(&err);
+        /// Implementation details for running effects of a component. Calls registered effects in the provided
+        /// order. May call itself due to state updates that took place inside registered effects.
+        /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
+        fn run_effects(
+            &mut self,
+            prev_state: &JsValue,
+            prev_props: &JsValue,
+        ) -> Result<(), CustomError> {
+            let effects = self.effects.clone();
+            let effects_call_result_arr = effects.into_iter().map(|f| Into::<Function>::into(f));
+            for effect in effects_call_result_arr {
+                let args: Array = Array::of4(
+                    prev_props,
+                    &JsValue::undefined(), // TODO: this must be replaced with correct value.
+                    prev_state,
+                    &self.state_parsed(),
+                );
+                let effect_result = effect.apply(&JsValue::undefined(), &args);
+                if effect_result.is_err() {
+                    let error = effect_result.unwrap_err();
+                    let msg = from_value(error)
+                        .unwrap_or(String::from("There was an error while running effects."));
+                    return Err(CustomError::EvaluationError(msg));
+                } else {
+                    let new_state = effect_result.unwrap();
+                    if !new_state.is_undefined() {
+                        let prev_state = &self.state_parsed();
+                        let prev_props = &self.props_parsed();
+                        let set_state_result = self.set_state_with_value(new_state);
+                        if set_state_result.is_err() {
+                            return Err(set_state_result.unwrap_err());
+                        }
+                        return self.run_effects(prev_state, prev_props);
+                    }
                 }
             }
-            // effects.into_iter().ma
-            // for effect in effects {
-            //     log_1(&JsValue::from_str("1"));
-            //     if JsValue::is_function(&effect) {
-            //         log_1(&JsValue::from_str("2"));
-            //         let f: Function = effect.into();
-            //         log_1(&JsValue::from_str("3"));
-            //         let result = f.call2(&JsValue::undefined(), prev_props, prev_state);
-            //         log_1(&JsValue::from_str("4"));
-            //         if result.is_err() {
-            //             let err = result.unwrap_err();
-            //             log_1(&err);
-            //         } else {
-            //             log_1(&JsValue::from_str("haaaa?"));
-            //         }
-            //     }
-            // }
+
+            Ok(())
         }
 
         #[wasm_bindgen]
         /// Updates the `state` of a component which this function is called with, using a callback function.
         /// provided callback is called with component's current `state` as an argument, allowing user to
         /// return the component's next `state` accordingly.
+        /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
         pub fn set_state(&mut self, callback: Function) {
             let prev_state = self.state_parsed();
-            let new_state = self.set_state_inner(&prev_state, callback).unwrap();
-            self.state = new_state; 
-            Self::run_effects(
-                self.effect_arr_into_vec(),
-                &prev_state,
-                &self.props_parsed(),
-            );
+            let new_state_result = self.set_state_inner(&prev_state, callback);
+            if new_state_result.is_err() {
+                error_handler(new_state_result.unwrap_err());
+            }
+            // diffing algroithm, DOM update, VDOM update and all other shenanigan here.
+            time();
+            let result = self.run_effects(&prev_state, &self.props_parsed());
+            time_end();
+            if result.is_err() {
+                error_handler(result.unwrap_err());
+            }
         }
 
         /// Given a component object, parses its presenter using the `parse_presenter` function and then
@@ -257,21 +299,6 @@ pub mod component_mod {
             if vdom_creation_result.is_err() {
                 let err = vdom_creation_result.unwrap_err();
                 error_handler(err);
-                // match err {
-                //     CustomError::TypeError(e) => {
-                //         log_1(&JsValue::from_str(&e));
-                //     }
-                //     CustomError::SerdeWasmBindgenError(e) => {
-                //         let a = e.to_string();
-                //         log_1(&JsValue::from_str(&a));
-                //     }
-                //     CustomError::ResolveError(e) => {
-                //         log_1(&JsValue::from_str(&e));
-                //     }
-                //     _ => {
-                //         log_1(&JsValue::from_str("others"));
-                //     }
-                // }
             }
             return self.clone();
         }

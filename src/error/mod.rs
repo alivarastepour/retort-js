@@ -1,15 +1,14 @@
+/// provides functionality which is used to handle errors that occurred during any process.
 pub mod error_mod {
-    use serde_wasm_bindgen::from_value;
+    use serde_wasm_bindgen::{from_value, Error as SerdeWasmBindgenError};
     use std::fmt::Display;
     use wasm_bindgen::JsValue;
-    use web_sys::{
-        console::{error_1, log_1},
-        Document, Element,
-    };
+    use web_sys::{console::error_1, Document, Element};
 
     use crate::dom::dom_mod::{get_app_wrapper, get_document};
 
     #[derive(Debug)]
+    /// An enum which contains different types of errors and their associated data(error objects, strings, etc).
     pub enum Error {
         ParsingError(String),
         ReferenceError(String),
@@ -26,8 +25,7 @@ pub mod error_mod {
             let indicator = get_variant_text(&self);
             match &self {
                 Error::DomError(err) => {
-                    let msg_result: Result<String, serde_wasm_bindgen::Error> =
-                        from_value(err.clone());
+                    let msg_result: Result<String, SerdeWasmBindgenError> = from_value(err.clone());
                     let msg =
                         msg_result.unwrap_or("Could not parse error message properly.".to_owned());
                     let full_message = indicator + ": " + &msg;
@@ -52,6 +50,7 @@ pub mod error_mod {
         }
     }
 
+    /// returns a string corresponding to `Error` variant.
     fn get_variant_text(error: &Error) -> String {
         match &error {
             Error::DomError(_) => "DOM error".to_owned(),
@@ -65,12 +64,14 @@ pub mod error_mod {
         }
     }
 
+    /// Logs the error to the console using `console.error` function.
     fn error_log(error: &Error) {
         let error_string = error.to_string();
         let js_value_error_string = JsValue::from_str(&error_string);
         error_1(&js_value_error_string);
     }
 
+    /// Displays the error message in the DOM, removing all its content to emphasize severity of error.
     fn error_display(error: &Error, wrapper: Element, document: Document) {
         let error_wrapper_result = document.create_element("div");
         let error_subtitle_result = document.create_element("p");
@@ -126,6 +127,7 @@ pub mod error_mod {
         }
     }
 
+    /// Exposes error logging and displaying logic publicly.
     pub fn error_handler(error: Error) {
         let wrapper = get_app_wrapper();
         let document = get_document();

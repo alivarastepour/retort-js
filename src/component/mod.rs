@@ -1,5 +1,5 @@
 pub mod component_mod {
-    use std::{collections::HashMap, ops::Deref};
+    use std::{collections::HashMap, iter::Map, ops::Deref};
 
     use crate::{
         dom::dom_mod::construct_dom_wrapper,
@@ -9,7 +9,10 @@ pub mod component_mod {
     use serde::{Deserialize, Serialize};
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::js_sys::{Function, JSON};
+    use web_sys::{
+        console::{log, log_1},
+        js_sys::{Array, Function, JSON},
+    };
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -24,6 +27,8 @@ pub mod component_mod {
         #[serde(with = "serde_wasm_bindgen::preserve")]
         component_did_mount: Function,
         vdom: Box<VirtualNode>,
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        effects: Array,
     }
 
     impl Clone for Component {
@@ -34,6 +39,7 @@ pub mod component_mod {
                 state: self.state.to_owned(),
                 component_did_mount: self.component_did_mount.clone(),
                 vdom: Box::from(self.vdom.deref().to_owned()),
+                effects: self.effects.clone(),
             }
         }
     }
@@ -56,6 +62,12 @@ pub mod component_mod {
         pub fn set_vdom(&mut self, v_node: &VirtualNode) {
             self.vdom = Box::new(v_node.clone());
         }
+
+        pub fn effect_arr_into_vec(&self) -> Vec<JsValue> {
+            let arr = &self.effects;
+            let iter_arr = &arr.clone().into_iter();
+            iter_arr.clone().collect()
+        }
     }
 
     #[wasm_bindgen]
@@ -72,6 +84,7 @@ pub mod component_mod {
                     children: Vec::new(),
                     node_type: NodeType::Tag(" ".to_owned()),
                 }),
+                effects: Array::new(),
             }
         }
 
@@ -91,6 +104,16 @@ pub mod component_mod {
             to_value(&self.vdom).unwrap()
         }
 
+        #[wasm_bindgen(getter)]
+        pub fn effects(&self) -> Array {
+            self.effects.clone()
+        }
+
+        #[wasm_bindgen(setter)]
+        pub fn set_effects(&mut self, effects: Array) {
+            self.effects = effects;
+        }
+
         #[wasm_bindgen(setter)]
         pub fn set_component_did_mount(&mut self, component_did_mount: &Function) {
             self.component_did_mount = component_did_mount.clone();
@@ -98,8 +121,14 @@ pub mod component_mod {
 
         #[wasm_bindgen(getter)]
         pub fn state_parsed(&self) -> JsValue {
+            //TODO: consider writing a macro for this functionality
             // TODO:: observe usages of state property and their types, remove extra functionalities
             JSON::parse(&self.state).unwrap_or(JsValue::null())
+        }
+
+        #[wasm_bindgen(getter)]
+        pub fn props_parsed(&self) -> JsValue {
+            JSON::parse(&self.props).unwrap_or(JsValue::null())
         }
 
         #[wasm_bindgen(getter)]
@@ -128,12 +157,15 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen]
-        /// Updates the `state` of a component which this function is called with, using a callback function.
-        /// provided callback is called with component's current `state` as an argument, allowing user to
-        /// return the component's next `state` accordingly.
-        pub fn set_state(&mut self, callback: Function) {
-            let state_js_value = self.state_parsed();
-            let new_state_result = callback.call1(&JsValue::undefined(), &state_js_value);
+        pub fn register_effect(&mut self, callback: Function) {
+            let prev = &self.effects;
+            let new = vec![callback];
+            let new_array: Array = new.into_iter().collect();
+            self.set_effects(prev.concat(&new_array));
+        }
+
+        fn set_state_inner(&self, prev_state: &JsValue, callback: Function) -> Result<String, ()> {
+            let new_state_result = callback.call1(&JsValue::undefined(), &prev_state);
             if new_state_result.is_err() {
                 let msg_js_value = new_state_result.as_ref().unwrap_err();
                 let msg = JsValue::as_string(&msg_js_value).unwrap_or(String::from(
@@ -144,7 +176,55 @@ pub mod component_mod {
             }
             let new_state = new_state_result.unwrap();
             let new_state_string = JSON::stringify(&new_state).unwrap();
-            self.state = new_state_string.into();
+            // self.state = new_state_string.into();
+            Ok(new_state_string.into())
+        }
+
+        fn run_effects(effects: Vec<JsValue>, prev_state: &JsValue, prev_props: &JsValue) {
+            // let effects = self.effect_arr_into_vec();
+            let effects_call_result_arr: Vec<Result<JsValue, JsValue>> = effects
+                .into_iter()
+                .map(|f| Into::<Function>::into(f))
+                .map(|f| f.call2(&JsValue::undefined(), prev_props, prev_state))
+                .collect();
+            for item in effects_call_result_arr {
+                if item.is_err() {
+                    let err = item.unwrap_err();
+                    log_1(&err);
+                }
+            }
+            // effects.into_iter().ma
+            // for effect in effects {
+            //     log_1(&JsValue::from_str("1"));
+            //     if JsValue::is_function(&effect) {
+            //         log_1(&JsValue::from_str("2"));
+            //         let f: Function = effect.into();
+            //         log_1(&JsValue::from_str("3"));
+            //         let result = f.call2(&JsValue::undefined(), prev_props, prev_state);
+            //         log_1(&JsValue::from_str("4"));
+            //         if result.is_err() {
+            //             let err = result.unwrap_err();
+            //             log_1(&err);
+            //         } else {
+            //             log_1(&JsValue::from_str("haaaa?"));
+            //         }
+            //     }
+            // }
+        }
+
+        #[wasm_bindgen]
+        /// Updates the `state` of a component which this function is called with, using a callback function.
+        /// provided callback is called with component's current `state` as an argument, allowing user to
+        /// return the component's next `state` accordingly.
+        pub fn set_state(&mut self, callback: Function) {
+            let prev_state = self.state_parsed();
+            let new_state = self.set_state_inner(&prev_state, callback).unwrap();
+            self.state = new_state; 
+            Self::run_effects(
+                self.effect_arr_into_vec(),
+                &prev_state,
+                &self.props_parsed(),
+            );
         }
 
         /// Given a component object, parses its presenter using the `parse_presenter` function and then

@@ -3,16 +3,13 @@ pub mod component_mod {
 
     use crate::{
         dom::dom_mod::construct_dom_wrapper,
-        error::error_mod::Error as CustomError,
+        error::error_mod::{error_handler, Error as CustomError},
         parser::parser_mod::{NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    use web_sys::{
-        console::log_1,
-        js_sys::{Function, JSON},
-    };
+    use web_sys::js_sys::{Function, JSON};
 
     use crate::{
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
@@ -142,6 +139,8 @@ pub mod component_mod {
                 let msg = JsValue::as_string(&msg_js_value).unwrap_or(String::from(
                     "Error occurred while setting the state of component.",
                 ));
+                let error = CustomError::EvaluationError(msg);
+                error_handler(error);
             }
             let new_state = new_state_result.unwrap();
             let new_state_string = JSON::stringify(&new_state).unwrap();
@@ -177,21 +176,22 @@ pub mod component_mod {
             let vdom_creation_result = Self::create_vdom(self).await;
             if vdom_creation_result.is_err() {
                 let err = vdom_creation_result.unwrap_err();
-                match err {
-                    CustomError::TypeError(e) => {
-                        log_1(&JsValue::from_str(&e));
-                    }
-                    CustomError::SerdeWasmBindgenError(e) => {
-                        let a = e.to_string();
-                        log_1(&JsValue::from_str(&a));
-                    }
-                    CustomError::ResolveError(e) => {
-                        log_1(&JsValue::from_str(&e));
-                    }
-                    _ => {
-                        log_1(&JsValue::from_str("others"));
-                    }
-                }
+                error_handler(err);
+                // match err {
+                //     CustomError::TypeError(e) => {
+                //         log_1(&JsValue::from_str(&e));
+                //     }
+                //     CustomError::SerdeWasmBindgenError(e) => {
+                //         let a = e.to_string();
+                //         log_1(&JsValue::from_str(&a));
+                //     }
+                //     CustomError::ResolveError(e) => {
+                //         log_1(&JsValue::from_str(&e));
+                //     }
+                //     _ => {
+                //         log_1(&JsValue::from_str("others"));
+                //     }
+                // }
             }
             return self.clone();
         }
@@ -202,7 +202,7 @@ pub mod component_mod {
         pub fn mount(&mut self) {
             let res = construct_dom_wrapper(&self);
             if res.is_err() {
-                panic!("")
+                error_handler(res.unwrap_err());
             }
         }
     }

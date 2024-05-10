@@ -136,4 +136,120 @@ pub mod error_mod {
             error_display(&error, wrapper.unwrap(), document.unwrap());
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use serde::{Deserialize, Serialize};
+        use wasm_bindgen_test::*;
+
+        use super::*;
+        #[test]
+        /// tests `Error` variants which their associated info is `String`
+        fn test_error_to_string_1() {
+            let message = String::from("Some error message.");
+            let errors = vec![
+                Error::ParsingError(message.clone()),
+                Error::EvaluationError(message.clone()),
+                Error::ReferenceError(message.clone()),
+                Error::ResolveError(message.clone()),
+                Error::_InvestigationNeeded(message.clone()),
+                Error::TypeError(message.clone()),
+            ];
+            for error in errors {
+                let error_string = error.to_string();
+                let error_indicator = get_variant_text(&error);
+                assert!(error_string == format!("{error_indicator}: {message}"));
+            }
+        }
+
+        wasm_bindgen_test_configure!(run_in_browser);
+
+        #[wasm_bindgen_test]
+        /// tests `Error` variants which their associated info is `serde_wasm_bindgen::Error`
+        fn test_error_to_string_2() {
+            #[derive(Serialize, Deserialize, Debug)]
+            struct Temp {
+                num: i8,
+            }
+
+            let value: Result<Temp, SerdeWasmBindgenError> = from_value(JsValue::from_str(""));
+            if value.is_err() {
+                let error_unwrapped = value.unwrap_err();
+                let error_string = &error_unwrapped.to_string();
+                let error = Error::SerdeWasmBindgenError(error_unwrapped);
+                let error_indicator = get_variant_text(&error);
+                assert!(error.to_string() == format!("{error_indicator}: {error_string}"));
+            } else {
+                assert!(false);
+            }
+        }
+
+        #[wasm_bindgen_test]
+        /// tests `Error` variants which their associated info is `JsValue`
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/36"]
+        fn test_error_to_string_3() {
+            let document_result = get_document();
+            assert!(matches!(document_result, Ok(_)));
+            let document = document_result.unwrap();
+            let element_result = document.create_element("");
+            if element_result.is_err() {
+                let error_js_value = element_result.unwrap_err();
+                let error = Error::DomError(error_js_value.clone());
+                let msg_result = format!("{:?}", error_js_value);
+                let error_string = error.to_string();
+                let error_indicator = get_variant_text(&error);
+                assert!(error_string == format!("{error_indicator}: {msg_result}"));
+            } else {
+                console_log!("{:?}", element_result.unwrap());
+                assert!(false);
+            }
+        }
+
+        #[wasm_bindgen_test]
+        /// Creates a dummy error and checks if the error is properly reflected in DOM. There
+        /// is really no clean way of checking if the error is also reflected in the browser's console,
+        /// so we'll ignore it.
+        fn test_error_display() {
+            let document_result = get_document();
+            assert!(matches!(document_result, Ok(_)));
+            let document = document_result.unwrap();
+
+            let wrapper_result = document.create_element("div");
+            assert!(matches!(wrapper_result, Ok(_)));
+            let wrapper = wrapper_result.unwrap();
+
+            let body_result = document.body();
+            assert!(matches!(body_result, Some(_)));
+            let body = body_result.unwrap();
+
+            let attribute_result = wrapper.set_attribute("id", "root");
+            let append_result = body.append_child(&wrapper);
+            assert!(matches!(attribute_result, Ok(_)) && matches!(append_result, Ok(_)));
+
+            let error = Error::ParsingError("Some error".to_owned());
+            error_display(&error, wrapper, document);
+
+            let document_result = get_document();
+            assert!(matches!(document_result, Ok(_)));
+            let document = document_result.unwrap();
+
+            let root = document.get_element_by_id("root");
+            assert!(matches!(root, None));
+
+            let error_wrapper_option_result = document.query_selector("body > div");
+            assert!(matches!(error_wrapper_option_result, Ok(_)));
+            let error_wrapper_option = error_wrapper_option_result.unwrap();
+
+            assert!(matches!(error_wrapper_option, Some(_)));
+            let error_wrapper = error_wrapper_option.unwrap();
+
+            let children_count = error_wrapper.child_element_count();
+            assert!(children_count == 1);
+
+            let error_message = error_wrapper.text_content();
+            assert!(
+                matches!(error_message, Some(value) if value.contains("Some error") && value.contains(&get_variant_text(&error)))
+            )
+        }
+    }
 }

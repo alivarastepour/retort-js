@@ -218,6 +218,99 @@ pub mod evaluator_mod {
         }
     }
 
+    #[cfg(test)]
+    mod tests {
+        use wasm_bindgen::JsValue;
+        use wasm_bindgen_test::*;
+        use web_sys::js_sys::Array;
+
+        use crate::error::error_mod::Error;
+
+        use super::*;
+
+        wasm_bindgen_test_configure!(run_in_browser);
+
+        #[wasm_bindgen_test]
+        /// `fill_evaluated_expression_string_result` should return string value of f64 numbers wrapped
+        /// inside `JsValue`.
+        fn test_fill_evaluated_expression_string_result_1() {
+            let js_expression = "a.age".to_owned();
+            let js_value_result = JsValue::from_f64(4.0);
+            let evaluated_expression_string_result =
+                fill_evaluated_expression_string_result(js_value_result, js_expression);
+            assert!(
+                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("4"))
+            )
+        }
+
+        #[wasm_bindgen_test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/45"]
+        /// `fill_evaluated_expression_string_result` should return string value of null values wrapped
+        /// inside `JsValue`.
+        fn test_fill_evaluated_expression_string_result_2() {
+            let js_expression = "document.getElementById(\"c\")".to_owned();
+            let js_value_result = JsValue::NULL;
+            let evaluated_expression_string_result =
+                fill_evaluated_expression_string_result(js_value_result, js_expression);
+            assert!(
+                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("null"))
+            )
+        }
+
+        #[wasm_bindgen_test]
+        #[ignore = "https://github.com/alivarastepour/retort-js/issues/45"]
+        /// `fill_evaluated_expression_string_result` should return string value of undefined values wrapped
+        /// inside `JsValue`.
+        fn test_fill_evaluated_expression_string_result_3() {
+            let js_expression = "a.b".to_owned();
+            let js_value_result = JsValue::UNDEFINED;
+            let evaluated_expression_string_result =
+                fill_evaluated_expression_string_result(js_value_result, js_expression);
+            assert!(
+                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("undefined"))
+            )
+        }
+
+        #[wasm_bindgen_test]
+        /// `fill_evaluated_expression_string_result` should return string value of booleans wrapped
+        /// inside `JsValue`.
+        fn test_fill_evaluated_expression_string_result_4() {
+            let js_expression = "a.isActive".to_owned();
+            let js_value_result = JsValue::from_bool(true);
+            let evaluated_expression_string_result =
+                fill_evaluated_expression_string_result(js_value_result, js_expression);
+            assert!(
+                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("true"))
+            )
+        }
+
+        #[wasm_bindgen_test]
+        /// `fill_evaluated_expression_string_result` should return string value of strings wrapped
+        /// inside `JsValue`.
+        fn test_fill_evaluated_expression_string_result_5() {
+            let js_expression = "a.name".to_owned();
+            let js_value_result = JsValue::from_str("ali");
+            let evaluated_expression_string_result =
+                fill_evaluated_expression_string_result(js_value_result, js_expression);
+            assert!(
+                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("ali"))
+            )
+        }
+
+        #[wasm_bindgen_test]
+        /// `fill_evaluated_expression_string_result` must return error when provided JsValue is not of type
+        /// `string`, `number`, `bool`, `undefined` or `null`.
+        fn test_fill_evaluated_expression_string_result_error() {
+            let js_expression = "a.posts".to_owned();
+            let js_value_result = Array::of1(&JsValue::from_str("s")).into();
+            let evaluated_expression_string_result =
+                fill_evaluated_expression_string_result(js_value_result, js_expression);
+            assert!(
+                matches!(evaluated_expression_string_result, Err(err) if matches!(&err, Error::EvaluationError(msg) if msg.ends_with("a.posts")))
+            )
+        }
+    }
+
     // fn get_tag_content_variant(text: String) -> Result<(), Error> {
     //     let collected_expression_and_string_result = extract_expression_and_string(text);
     //     if collected_expression_and_string_result.is_err() {

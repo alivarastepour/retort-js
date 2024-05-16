@@ -1,4 +1,7 @@
+mod effects;
+
 pub mod component_mod {
+
     use std::{collections::HashMap, ops::Deref};
 
     use crate::{
@@ -10,7 +13,7 @@ pub mod component_mod {
     use serde_wasm_bindgen::{from_value, to_value};
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{
-        console::{time, time_end},
+        console::{time, time_end, time_end_with_label, time_with_label},
         js_sys::{Array, Function, JSON},
     };
 
@@ -18,17 +21,21 @@ pub mod component_mod {
         parser::parser_mod::parse_vdom_from_string, presenter::presenter_mod::parse_presenter,
     };
 
+    pub use super::effects::effects_mod::{effects_runner, Effects};
+
     #[derive(Serialize, Deserialize, Debug)]
     #[wasm_bindgen]
     pub struct Component {
         state: String,
         presenter: String,
         props: String,
-        #[serde(with = "serde_wasm_bindgen::preserve")]
-        component_did_mount: Function,
         vdom: Box<VirtualNode>,
         #[serde(with = "serde_wasm_bindgen::preserve")]
         effects: Array,
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        component_did_mount: Array,
+        #[serde(with = "serde_wasm_bindgen::preserve")]
+        component_will_unmount: Array,
     }
 
     impl Clone for Component {
@@ -38,6 +45,7 @@ pub mod component_mod {
                 props: self.props.to_owned(),
                 state: self.state.to_owned(),
                 component_did_mount: self.component_did_mount.clone(),
+                component_will_unmount: self.component_will_unmount.clone(),
                 vdom: Box::from(self.vdom.deref().to_owned()),
                 effects: self.effects.clone(),
             }
@@ -57,6 +65,14 @@ pub mod component_mod {
 
         pub fn get_props<'a>(&'a self) -> &'a String {
             return &self.props;
+        }
+
+        pub fn get_component_did_mount<'a>(&'a self) -> &'a Array {
+            return &self.component_did_mount;
+        }
+
+        pub fn get_effects<'a>(&'a self) -> &'a Array {
+            return &self.effects;
         }
 
         pub fn set_vdom(&mut self, v_node: &VirtualNode) {
@@ -94,31 +110,39 @@ pub mod component_mod {
     #[wasm_bindgen]
     impl Component {
         #[wasm_bindgen(constructor)]
-        pub fn new(state: String, presenter: String, component_did_mount: &Function) -> Component {
+        pub fn new(state: String, presenter: String) -> Component {
+            let empty_vdom = Box::new(VirtualNode {
+                // no need to have a valid vdom at this point
+                attributes: HashMap::new(),
+                children: Vec::new(),
+                node_type: NodeType::Tag(" ".to_owned()),
+            });
             Component {
                 state,
                 presenter,
                 props: "{}".to_owned(),
-                component_did_mount: component_did_mount.clone(),
-                vdom: Box::new(VirtualNode {
-                    attributes: HashMap::new(),
-                    children: Vec::new(),
-                    node_type: NodeType::Tag(" ".to_owned()),
-                }),
+                vdom: empty_vdom,
                 effects: Array::new(),
+                component_will_unmount: Array::new(),
+                component_did_mount: Array::new(),
             }
         }
 
         #[wasm_bindgen(getter)]
-        pub fn component_did_mount(&self) -> Function {
+        pub fn component_did_mount(&self) -> Array {
             self.component_did_mount.clone()
         }
 
-        #[wasm_bindgen]
-        pub fn call_component_did_mount(&self) -> Result<JsValue, JsValue> {
-            let res = self.component_did_mount.call0(&JsValue::null());
-            return res;
+        #[wasm_bindgen(getter)]
+        pub fn component_will_unmount(&self) -> Array {
+            self.component_will_unmount.clone()
         }
+
+        // #[wasm_bindgen]
+        // pub fn call_component_did_mount(&self) -> Result<JsValue, JsValue> {
+        //     let res = self.component_did_mount.call0(&JsValue::null());
+        //     return res;
+        // }
 
         #[wasm_bindgen(getter)]
         pub fn vdom(&self) -> JsValue {
@@ -136,8 +160,13 @@ pub mod component_mod {
         }
 
         #[wasm_bindgen(setter)]
-        pub fn set_component_did_mount(&mut self, component_did_mount: &Function) {
-            self.component_did_mount = component_did_mount.clone();
+        pub fn set_component_will_unmount(&mut self, callbacks: Array) {
+            self.component_will_unmount = callbacks;
+        }
+
+        #[wasm_bindgen(setter)]
+        pub fn set_component_did_mount(&mut self, callbacks: Array) {
+            self.component_did_mount = callbacks;
         }
 
         #[wasm_bindgen(getter)]
@@ -186,6 +215,24 @@ pub mod component_mod {
             self.set_effects(prev.concat(&new_array));
         }
 
+        #[wasm_bindgen]
+        /// adds the provided callback to component's component_did_mount effects list.
+        pub fn register_component_did_mount(&mut self, callback: Function) {
+            let prev = &self.component_did_mount;
+            let new = vec![callback];
+            let new_array: Array = new.into_iter().collect();
+            self.set_component_did_mount(prev.concat(&new_array));
+        }
+
+        #[wasm_bindgen]
+        /// adds the provided callback to component's component_will_unmount effects list.
+        pub fn register_component_will_unmount(&mut self, callback: Function) {
+            let prev = &self.component_will_unmount;
+            let new = vec![callback];
+            let new_array: Array = new.into_iter().collect();
+            self.set_component_will_unmount(prev.concat(&new_array));
+        }
+
         /// Implementation details of setting state of a component.
         fn set_state_inner(
             &mut self,
@@ -212,42 +259,46 @@ pub mod component_mod {
         /// Implementation details for running effects of a component. Calls registered effects in the provided
         /// order. May call itself due to state updates that took place inside registered effects.
         /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
-        fn run_effects(
-            &mut self,
-            prev_state: &JsValue,
-            prev_props: &JsValue,
-        ) -> Result<(), CustomError> {
-            let effects = self.effects.clone();
-            let effects_call_result_arr = effects.into_iter().map(|f| Into::<Function>::into(f));
-            for effect in effects_call_result_arr {
-                let args: Array = Array::of4(
-                    prev_props,
-                    &JsValue::undefined(), // TODO: this must be replaced with correct value.
-                    prev_state,
-                    &self.state_parsed(),
-                );
-                let effect_result = effect.apply(&JsValue::undefined(), &args);
-                if effect_result.is_err() {
-                    let error = effect_result.unwrap_err();
-                    let msg = from_value(error)
-                        .unwrap_or(String::from("There was an error while running effects."));
-                    return Err(CustomError::EvaluationError(msg));
-                } else {
-                    let new_state = effect_result.unwrap();
-                    if !new_state.is_undefined() {
-                        let prev_state = &self.state_parsed();
-                        let prev_props = &self.props_parsed();
-                        let set_state_result = self.set_state_with_value(new_state);
-                        if set_state_result.is_err() {
-                            return Err(set_state_result.unwrap_err());
-                        }
-                        return self.run_effects(prev_state, prev_props);
-                    }
-                }
-            }
+        // fn run_effects(
+        //     &mut self,
+        //     prev_state: &JsValue,
+        //     prev_props: &JsValue,
+        // ) -> Result<(), CustomError> {
+        //     let effects = self.effects.clone();
+        //     let effects_call_result_arr = effects.into_iter().map(|f| Into::<Function>::into(f));
+        //     for effect in effects_call_result_arr {
+        //         let args: Array = Array::of4(
+        //             prev_props,
+        //             &JsValue::undefined(), // TODO: this must be replaced with correct value.
+        //             prev_state,
+        //             &self.state_parsed(),
+        //         );
+        //         let effect_result = effect.apply(&JsValue::undefined(), &args);
+        //         if effect_result.is_err() {
+        //             let error = effect_result.unwrap_err();
+        //             let msg = from_value(error)
+        //                 .unwrap_or(String::from("There was an error while running effects."));
+        //             return Err(CustomError::EvaluationError(msg));
+        //         } else {
+        //             let new_state = effect_result.unwrap();
+        //             if !new_state.is_undefined() {
+        //                 let prev_state = &self.state_parsed();
+        //                 let prev_props = &self.props_parsed();
+        //                 let set_state_result = self.set_state_with_value(new_state);
+        //                 if set_state_result.is_err() {
+        //                     return Err(set_state_result.unwrap_err());
+        //                 }
+        //                 return self.run_effects(prev_state, prev_props);
+        //             }
+        //         }
+        //     }
 
-            Ok(())
-        }
+        //     Ok(())
+        // }
+
+        // fn run_effects_wrapper(&mut self, prev_state: &JsValue, prev_props: &JsValue) {
+        //     <ComponentDidMountEffects as Effect>::effects_runner(self, prev_state, prev_props);
+        // }
 
         #[wasm_bindgen]
         /// Updates the `state` of a component which this function is called with, using a callback function.
@@ -260,9 +311,15 @@ pub mod component_mod {
             if new_state_result.is_err() {
                 error_handler(new_state_result.unwrap_err());
             }
-            // diffing algroithm, DOM update, VDOM update and all other shenanigan here.
+            // diffing algorithm, DOM update, VDOM update and all other shenanigan here.
             time();
-            let result = self.run_effects(&prev_state, &self.props_parsed());
+            let result = effects_runner(
+                Effects::ComponentDidUpdate,
+                self,
+                &prev_state,
+                &self.props_parsed(),
+            );
+            // let result = self.run_effects(&prev_state, &self.props_parsed());
             time_end();
             if result.is_err() {
                 error_handler(result.unwrap_err());
@@ -307,7 +364,20 @@ pub mod component_mod {
         /// constructs the DOM from a given entry point. This should be called from the component
         /// that wraps the entire component tree, otherwise a subtree of components will be added to DOM.
         pub fn mount(&mut self) {
-            let res = construct_dom_wrapper(&self);
+            time_with_label("total render time:");
+
+            // currently, root component is not being recognized as a `Component` object in vdom; this
+            // introduces some problems to overall logic. So as a workaround, we change its `node_type` type manually
+            // to `Component`. HOWEVER, i'm not sure this is the best solution.
+
+            self.set_vdom(&VirtualNode {
+                attributes: HashMap::new(), // root component should have no props.
+                children: Vec::new(),       // children for component in inheritably not supported
+                node_type: NodeType::Component(self.clone()), // change node type of root from Tag to Component
+            });
+
+            let res = construct_dom_wrapper(self);
+            time_end_with_label("total render time:");
             if res.is_err() {
                 error_handler(res.unwrap_err());
             }

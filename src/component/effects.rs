@@ -5,12 +5,17 @@ pub mod effects_mod {
 
     use crate::{component::component_mod::Component, error::error_mod::Error};
 
+    /// An enum to keep variants of different effects in a component.
     pub enum Effects {
         ComponentDidMount,
         ComponentDidUpdate,
         ComponentWillUnmount,
     }
 
+    /// Implementation details for running initial effects of a component, traditionally known
+    /// as `component_did_mount`. Returns `Ok` if no error occurs while running effects; an `Err` variant
+    /// explaining why otherwise.
+    /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
     fn component_did_mount_runner(
         component: &mut Component,
         prev_state: &JsValue,
@@ -18,8 +23,6 @@ pub mod effects_mod {
     ) -> Result<(), Error> {
         let effects = component.get_component_did_mount().clone();
         let effect_callbacks = effects.into_iter().map(|f| Into::<Function>::into(f));
-
-        let mut state_has_changed = false;
 
         for effect in effect_callbacks {
             let args: Array = Array::of4(
@@ -30,6 +33,7 @@ pub mod effects_mod {
             );
 
             let effect_result = effect.apply(&JsValue::undefined(), &args);
+
             if effect_result.is_err() {
                 let error = effect_result.unwrap_err();
                 let msg = from_value(error)
@@ -40,40 +44,29 @@ pub mod effects_mod {
 
                 if !new_state.is_undefined() {
                     // undefined is the default returned value in functions in JS.
-                    // when no value is returned from effects, we assume that no state update has happened.
+                    // when no value is returned from effects, we assume that no state update has occurred.
                     let set_state_result = component.set_state_with_value(new_state);
-                    state_has_changed = true;
                     if set_state_result.is_err() {
                         return Err(set_state_result.unwrap_err());
                     }
                 }
             }
         }
-
-        // if !state_has_changed {
-        //     // there's no point in rerunning effects if state hasn't changed.
-        //     return Ok(());
-        // }
-
-        // let result =
-        //     component_did_update_runner(component, prev_state, prev_props, Some(&prev_state), None);
-
-        // if result.is_err() {
-        //     return Err(result.unwrap_err());
-        // }
-
         return Ok(());
     }
 
-    /// Implementation details for running effects of a component, a.k.a. `component_did_update`.
-    /// Calls registered effects in the provided order.
+    /// Implementation details for running effects of a component, traditionally known as
+    /// `component_did_update`.
     /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
     fn component_did_update_runner(
         component: &mut Component,
         prev_state: &JsValue,
         prev_props: &JsValue,
-        state: Option<&JsValue>,
-        props: Option<&JsValue>,
+        state: Option<&JsValue>, // `state` and `props` are used as a workaround for calling this variant during the initial render.
+        props: Option<&JsValue>, // no caller from outside of this module can provide `Some` variant for these parameters, because the
+                                 // exposed public function passes `None` by default. this way we make sure that effects run with the
+                                 // initial state -and not the possibly updated version created by `component_did_mount` effects-
+                                 // during the first render.
     ) -> Result<(), Error> {
         let effects = component.get_effects().clone();
         let effect_callbacks = effects.into_iter().map(|f| Into::<Function>::into(f));
@@ -95,14 +88,10 @@ pub mod effects_mod {
                 let new_state = effect_result.unwrap();
                 if !new_state.is_undefined() {
                     state_was_updated = true;
-                    // let prev_state = &component.state_parsed();
-                    // let prev_props = &component.props_parsed();
                     let set_state_result = component.set_state_with_value(new_state);
                     if set_state_result.is_err() {
                         return Err(set_state_result.unwrap_err());
                     }
-                    // OBSERVE: what the hell was this?
-                    // return component_did_mount_runner(component, prev_state, prev_props);
                 }
             }
         }
@@ -140,12 +129,3 @@ pub mod effects_mod {
         }
     }
 }
-
-// on component mount:
-// all effects run, including didMount and effects
-// didMounts run first
-// then effects run
-// state updates in didMounts won't trigger an immediate rerender.
-// state updates in didMounts are not accessible in other didMounts
-// then effects run.
-// effects run once after component mount. also when state updates have happened in didMounts.(assuming any)

@@ -17,18 +17,18 @@ pub mod effects_mod {
         prev_props: &JsValue,
     ) -> Result<(), Error> {
         let effects = component.get_component_did_mount().clone();
-        let effects_call_result_arr = effects.into_iter().map(|f| Into::<Function>::into(f));
-        // let mut state_has_changed = false;
-        let mut state_results: Vec<JsValue> = Vec::new();
-        // let a = effects_call_result_arr.len() as f64;
-        // log_1(&JsValue::from_f64(a));
-        for effect in effects_call_result_arr {
+        let effect_callbacks = effects.into_iter().map(|f| Into::<Function>::into(f));
+
+        let mut state_has_changed = false;
+
+        for effect in effect_callbacks {
             let args: Array = Array::of4(
                 prev_props,
                 &JsValue::undefined(), // TODO: this must be replaced with correct value.
                 prev_state,
                 &component.state_parsed(),
             );
+
             let effect_result = effect.apply(&JsValue::undefined(), &args);
             if effect_result.is_err() {
                 let error = effect_result.unwrap_err();
@@ -37,61 +37,53 @@ pub mod effects_mod {
                 return Err(Error::EvaluationError(msg));
             } else {
                 let new_state = effect_result.unwrap();
+
                 if !new_state.is_undefined() {
-                    // state_has_changed = true;
-                    // let prev_state = &component.state_parsed();
-                    // let prev_props = &component.props_parsed();
-                    state_results.push(new_state);
-                    // let set_state_result = component.set_state_with_value(new_state);
-                    // if set_state_result.is_err() {
-                    //     return Err(set_state_result.unwrap_err());
-                    // }
-                    // return component.run_effects(prev_state, prev_props);
+                    // undefined is the default returned value in functions in JS.
+                    // when no value is returned from effects, we assume that no state update has happened.
+                    let set_state_result = component.set_state_with_value(new_state);
+                    state_has_changed = true;
+                    if set_state_result.is_err() {
+                        return Err(set_state_result.unwrap_err());
+                    }
                 }
             }
         }
 
         // if !state_has_changed {
+        //     // there's no point in rerunning effects if state hasn't changed.
         //     return Ok(());
         // }
 
-        let result = effects_runner(
-            Effects::ComponentDidUpdate,
-            component,
-            prev_state,
-            prev_props,
-        );
+        // let result =
+        //     component_did_update_runner(component, prev_state, prev_props, Some(&prev_state), None);
 
-        if result.is_err() {
-            return Err(result.unwrap_err());
-        }
-
-        for new_state in state_results {
-            let set_state_result = component.set_state_with_value(new_state);
-            if set_state_result.is_err() {
-                return Err(set_state_result.unwrap_err());
-            }
-        }
+        // if result.is_err() {
+        //     return Err(result.unwrap_err());
+        // }
 
         return Ok(());
     }
 
-    /// Implementation details for running effects of a component. Calls registered effects in the provided
-    /// order. May call itself due to state updates that took place inside registered effects.
+    /// Implementation details for running effects of a component, a.k.a. `component_did_update`.
+    /// Calls registered effects in the provided order.
     /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
     fn component_did_update_runner(
         component: &mut Component,
         prev_state: &JsValue,
         prev_props: &JsValue,
+        state: Option<&JsValue>,
+        props: Option<&JsValue>,
     ) -> Result<(), Error> {
         let effects = component.get_effects().clone();
-        let effects_call_result_arr = effects.into_iter().map(|f| Into::<Function>::into(f));
-        for effect in effects_call_result_arr {
+        let effect_callbacks = effects.into_iter().map(|f| Into::<Function>::into(f));
+        let mut state_was_updated = false;
+        for effect in effect_callbacks {
             let args: Array = Array::of4(
                 prev_props,
                 &JsValue::undefined(), // TODO: this must be replaced with correct value.
                 prev_state,
-                &component.state_parsed(),
+                state.unwrap_or(&component.state_parsed()),
             );
             let effect_result = effect.apply(&JsValue::undefined(), &args);
             if effect_result.is_err() {
@@ -102,24 +94,33 @@ pub mod effects_mod {
             } else {
                 let new_state = effect_result.unwrap();
                 if !new_state.is_undefined() {
-                    let prev_state = &component.state_parsed();
-                    let prev_props = &component.props_parsed();
+                    state_was_updated = true;
+                    // let prev_state = &component.state_parsed();
+                    // let prev_props = &component.props_parsed();
                     let set_state_result = component.set_state_with_value(new_state);
                     if set_state_result.is_err() {
                         return Err(set_state_result.unwrap_err());
                     }
-                    return component_did_mount_runner(component, prev_state, prev_props);
+                    // OBSERVE: what the hell was this?
+                    // return component_did_mount_runner(component, prev_state, prev_props);
                 }
             }
+        }
+
+        if state_was_updated {
+            return component_did_update_runner(component, prev_state, prev_props, state, props);
         }
 
         Ok(())
     }
 
+    /// not implemented
     fn component_will_unmount_runner() -> Result<(), Error> {
         return Ok(());
     }
 
+    /// Exposes effect runners to other modules. This function must be the only way of accessing functionality
+    /// in this module to the outer modules.
     pub fn effects_runner(
         effect: Effects,
         component: &mut Component,
@@ -131,17 +132,13 @@ pub mod effects_mod {
                 return component_did_mount_runner(component, prev_state, prev_props);
             }
             Effects::ComponentDidUpdate => {
-                return component_did_update_runner(component, prev_state, prev_props)
+                return component_did_update_runner(component, prev_state, prev_props, None, None)
             }
             Effects::ComponentWillUnmount => {
                 return component_will_unmount_runner();
             }
         }
     }
-
-    // impl Effect for ComponentDidMountEffects {}
-
-    // impl Effect for ComponentDidMountEffects {}
 }
 
 // on component mount:

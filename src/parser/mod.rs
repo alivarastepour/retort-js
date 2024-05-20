@@ -134,9 +134,9 @@ pub mod parser_mod {
                 TokenizerState::Component => {
                     let component_path = imports.get(&token);
                     if let Option::None = component_path {
-                        let msg =
-                            "An import statement for {token} was supposed to exist, but it didn't."
-                                .to_owned();
+                        let msg = format!(
+                            "An import statement for `{token}` was supposed to exist, but it didn't."
+                        );
                         return Err(CustomError::ReferenceError(msg));
                     }
                     let component_path = component_path.unwrap();

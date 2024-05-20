@@ -253,7 +253,6 @@ pub mod evaluator_mod {
         }
 
         #[wasm_bindgen_test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/45"]
         /// `fill_evaluated_expression_string_result` should return string value of null values wrapped
         /// inside `JsValue`.
         fn test_fill_evaluated_expression_string_result_2() {
@@ -267,7 +266,6 @@ pub mod evaluator_mod {
         }
 
         #[wasm_bindgen_test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/45"]
         /// `fill_evaluated_expression_string_result` should return string value of undefined values wrapped
         /// inside `JsValue`.
         fn test_fill_evaluated_expression_string_result_3() {

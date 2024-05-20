@@ -44,7 +44,6 @@ pub mod evaluator_util {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/42"]
         /// `has_valid_expression_inside` should return false for values which are String and
         /// not Expression.
         fn test_no_valid_expression_inside() {
@@ -54,7 +53,7 @@ pub mod evaluator_util {
         }
 
         #[test]
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/42"]
+        #[ignore = "This method of escaping chars is not helpful. We need another way but this ain't crucial."]
         /// `has_valid_expression_inside` should ignore escaped curly brackets.
         fn test_no_valid_expression_inside_with_curly_brackets() {
             let expression = String::from("some text with arbitrary \u{007D} and \u{007B}");

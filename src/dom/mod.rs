@@ -310,16 +310,8 @@ pub mod dom_mod {
     ) -> Result<(), Error> {
         let node_type = current_root.node_type.clone();
         let res;
-        // log_1(&JsValue::from_str("12"));
-        // let a = to_value(&current_component).unwrap();
-        // log_1(&a);
-
-        // let a = to_value(&current_root).unwrap();
-        // log_1(&a);
         match node_type {
             NodeType::Component(mut component) => {
-                // let a = to_value(&current_root).unwrap();
-                // log_1(&a);
                 let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
                     *component.get_vdom().clone(),
                     IfExprState::NotReached,

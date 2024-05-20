@@ -138,12 +138,6 @@ pub mod component_mod {
             self.component_will_unmount.clone()
         }
 
-        // #[wasm_bindgen]
-        // pub fn call_component_did_mount(&self) -> Result<JsValue, JsValue> {
-        //     let res = self.component_did_mount.call0(&JsValue::null());
-        //     return res;
-        // }
-
         #[wasm_bindgen(getter)]
         pub fn vdom(&self) -> JsValue {
             to_value(&self.vdom).unwrap()
@@ -255,50 +249,6 @@ pub mod component_mod {
             }
             Ok(())
         }
-
-        /// Implementation details for running effects of a component. Calls registered effects in the provided
-        /// order. May call itself due to state updates that took place inside registered effects.
-        /// NOTE that its logic is partially incomplete. after any state update, a repaint must be done.
-        // fn run_effects(
-        //     &mut self,
-        //     prev_state: &JsValue,
-        //     prev_props: &JsValue,
-        // ) -> Result<(), CustomError> {
-        //     let effects = self.effects.clone();
-        //     let effects_call_result_arr = effects.into_iter().map(|f| Into::<Function>::into(f));
-        //     for effect in effects_call_result_arr {
-        //         let args: Array = Array::of4(
-        //             prev_props,
-        //             &JsValue::undefined(), // TODO: this must be replaced with correct value.
-        //             prev_state,
-        //             &self.state_parsed(),
-        //         );
-        //         let effect_result = effect.apply(&JsValue::undefined(), &args);
-        //         if effect_result.is_err() {
-        //             let error = effect_result.unwrap_err();
-        //             let msg = from_value(error)
-        //                 .unwrap_or(String::from("There was an error while running effects."));
-        //             return Err(CustomError::EvaluationError(msg));
-        //         } else {
-        //             let new_state = effect_result.unwrap();
-        //             if !new_state.is_undefined() {
-        //                 let prev_state = &self.state_parsed();
-        //                 let prev_props = &self.props_parsed();
-        //                 let set_state_result = self.set_state_with_value(new_state);
-        //                 if set_state_result.is_err() {
-        //                     return Err(set_state_result.unwrap_err());
-        //                 }
-        //                 return self.run_effects(prev_state, prev_props);
-        //             }
-        //         }
-        //     }
-
-        //     Ok(())
-        // }
-
-        // fn run_effects_wrapper(&mut self, prev_state: &JsValue, prev_props: &JsValue) {
-        //     <ComponentDidMountEffects as Effect>::effects_runner(self, prev_state, prev_props);
-        // }
 
         #[wasm_bindgen]
         /// Updates the `state` of a component which this function is called with, using a callback function.

@@ -1,5 +1,4 @@
 pub mod effects_mod {
-    use serde_wasm_bindgen::from_value;
     use wasm_bindgen::JsValue;
     use web_sys::js_sys::{Array, Function};
 
@@ -36,8 +35,7 @@ pub mod effects_mod {
 
             if effect_result.is_err() {
                 let error = effect_result.unwrap_err();
-                let msg = from_value(error)
-                    .unwrap_or(String::from("There was an error while running effects."));
+                let msg = format!("{:?}", error);
                 return Err(Error::EvaluationError(msg));
             } else {
                 let new_state = effect_result.unwrap();
@@ -81,8 +79,7 @@ pub mod effects_mod {
             let effect_result = effect.apply(&JsValue::undefined(), &args);
             if effect_result.is_err() {
                 let error = effect_result.unwrap_err();
-                let msg = from_value(error)
-                    .unwrap_or(String::from("There was an error while running effects."));
+                let msg = format!("{:?}", error);
                 return Err(Error::EvaluationError(msg));
             } else {
                 let new_state = effect_result.unwrap();

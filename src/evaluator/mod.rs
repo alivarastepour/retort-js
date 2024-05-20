@@ -87,24 +87,10 @@ pub mod evaluator_mod {
         current_component: &Component,
     ) -> Result<String, Error> {
         let evaluator = get_state_props_evaluator(expression.to_owned());
-        let converted_state_result = to_value(current_component.get_state());
-        if converted_state_result.is_err() {
-            return Err(Error::SerdeWasmBindgenError(
-                converted_state_result.unwrap_err(),
-            ));
-        }
-        let converted_prop_result = to_value(current_component.get_props());
-        if converted_prop_result.is_err() {
-            return Err(Error::SerdeWasmBindgenError(
-                converted_prop_result.unwrap_err(),
-            ));
-        }
-        let converted_prop = converted_prop_result.unwrap();
-        let converted_state = converted_state_result.unwrap();
         let expression_evaluation_result = evaluator.call2(
-            &JsValue::undefined(), // not value for `this` is provided to the evaluator.
-            &converted_state,
-            &converted_prop,
+            &JsValue::undefined(), // no value for `this` is provided to the evaluator.
+            &current_component.state_parsed(),
+            &current_component.props_parsed(),
         );
         if expression_evaluation_result.is_err() {
             let msg: Result<String, serde_wasm_bindgen::Error> =

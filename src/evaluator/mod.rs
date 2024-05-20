@@ -24,7 +24,8 @@ pub mod evaluator_mod {
 
     /// Given a `JsValue` which is the result of evaluating some expression via the `window.Function`
     /// constructor, converts it to a String. `Err` variant is returned when `evaluated_expression`
-    /// can't be converted to string, number or boolean.
+    /// can't be converted to `string`, `number`, `boolean`, `undefined` or `null`. The `default` parameter is used in the error
+    /// message to inform caller of the expression with problem.
     fn fill_evaluated_expression_string_result(
         evaluated_expression: JsValue,
         default: String,
@@ -38,6 +39,10 @@ pub mod evaluator_mod {
         } else if evaluated_expression.as_bool().is_some() {
             let converted = evaluated_expression.as_bool().unwrap();
             result = converted.to_string();
+        } else if evaluated_expression.is_undefined() {
+            result = String::from("undefined");
+        } else if evaluated_expression.is_null() {
+            result = String::from("null");
         } else {
             return Err(Error::EvaluationError(format!(
                 "The following text value didn't have any of the supported(number, boolean, string) types: {default}"

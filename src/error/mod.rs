@@ -25,10 +25,8 @@ pub mod error_mod {
             let indicator = get_variant_text(&self);
             match &self {
                 Error::DomError(err) => {
-                    let msg_result: Result<String, SerdeWasmBindgenError> = from_value(err.clone());
-                    let msg =
-                        msg_result.unwrap_or("Could not parse error message properly.".to_owned());
-                    let full_message = indicator + ": " + &msg;
+                    let error_message = format!("{:?}", err);
+                    let full_message = indicator + ": " + &error_message;
                     f.write_str(&full_message)
                 }
 
@@ -186,7 +184,6 @@ pub mod error_mod {
 
         #[wasm_bindgen_test]
         /// tests `Error` variants which their associated info is `JsValue`
-        #[ignore = "https://github.com/alivarastepour/retort-js/issues/36"]
         fn test_error_to_string_3() {
             let document_result = get_document();
             assert!(matches!(document_result, Ok(_)));
@@ -200,7 +197,6 @@ pub mod error_mod {
                 let error_indicator = get_variant_text(&error);
                 assert!(error_string == format!("{error_indicator}: {msg_result}"));
             } else {
-                console_log!("{:?}", element_result.unwrap());
                 assert!(false);
             }
         }

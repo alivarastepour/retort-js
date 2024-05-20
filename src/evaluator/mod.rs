@@ -1,6 +1,7 @@
 mod js_evaluator;
 mod util;
 pub mod evaluator_mod {
+
     use super::js_evaluator::js_evaluator::get_state_props_evaluator;
     use super::util::evaluator_util::*;
     use serde_wasm_bindgen::{from_value, to_value};
@@ -16,15 +17,43 @@ pub mod evaluator_mod {
         Expression,
     }
 
+    impl AttributeTextVariant {
+        /// Given the context of component and original value, determines whether the value is a valid
+        /// string or a expression which needs to be evaluated. Returns `Ok` with a string if nothing goes
+        /// wrong, `Err` otherwise explaining why.
+        fn get_variant_as_string(
+            self,
+            value: String,
+            current_component: &Component,
+        ) -> Result<String, Error> {
+            let attr_value;
+            match self {
+                AttributeTextVariant::Expression => {
+                    let attr_value_result =
+                        evaluate_expression_and_string(value, current_component);
+                    if attr_value_result.is_err() {
+                        return Err(attr_value_result.unwrap_err());
+                    }
+                    attr_value = attr_value_result.unwrap();
+                }
+                _ => {
+                    attr_value = value;
+                }
+            }
+            return Ok(attr_value);
+        }
+    }
+
     #[derive(Debug)]
-    pub struct TextInfo<T> {
-        pub variant: T,
+    pub struct TextInfo {
+        pub variant: AttributeTextVariant,
         pub value: String,
     }
 
     /// Given a `JsValue` which is the result of evaluating some expression via the `window.Function`
     /// constructor, converts it to a String. `Err` variant is returned when `evaluated_expression`
-    /// can't be converted to string, number or boolean.
+    /// can't be converted to `string`, `number`, `boolean`, `undefined` or `null`. The `default` parameter is used in the error
+    /// message to inform caller of the expression with problem.
     fn fill_evaluated_expression_string_result(
         evaluated_expression: JsValue,
         default: String,
@@ -38,6 +67,10 @@ pub mod evaluator_mod {
         } else if evaluated_expression.as_bool().is_some() {
             let converted = evaluated_expression.as_bool().unwrap();
             result = converted.to_string();
+        } else if evaluated_expression.is_undefined() {
+            result = String::from("undefined");
+        } else if evaluated_expression.is_null() {
+            result = String::from("null");
         } else {
             return Err(Error::EvaluationError(format!(
                 "The following text value didn't have any of the supported(number, boolean, string) types: {default}"
@@ -54,24 +87,10 @@ pub mod evaluator_mod {
         current_component: &Component,
     ) -> Result<String, Error> {
         let evaluator = get_state_props_evaluator(expression.to_owned());
-        let converted_state_result = to_value(current_component.get_state());
-        if converted_state_result.is_err() {
-            return Err(Error::SerdeWasmBindgenError(
-                converted_state_result.unwrap_err(),
-            ));
-        }
-        let converted_prop_result = to_value(current_component.get_props());
-        if converted_prop_result.is_err() {
-            return Err(Error::SerdeWasmBindgenError(
-                converted_prop_result.unwrap_err(),
-            ));
-        }
-        let converted_prop = converted_prop_result.unwrap();
-        let converted_state = converted_state_result.unwrap();
         let expression_evaluation_result = evaluator.call2(
-            &JsValue::undefined(), // not value for `this` is provided to the evaluator.
-            &converted_state,
-            &converted_prop,
+            &JsValue::undefined(), // no value for `this` is provided to the evaluator.
+            &current_component.state_parsed(),
+            &current_component.props_parsed(),
         );
         if expression_evaluation_result.is_err() {
             let msg: Result<String, serde_wasm_bindgen::Error> =
@@ -140,7 +159,7 @@ pub mod evaluator_mod {
     /// determines how should a value in attribute be treated. Returns an `Ok` variant which contains
     /// the value and its type; or `Err` variant with explanation if `text` does not follow the defined
     /// attributes's value pattern.
-    fn get_attribute_text_variant(text: String) -> Result<TextInfo<AttributeTextVariant>, Error> {
+    fn get_attribute_text_variant(text: String) -> Result<TextInfo, Error> {
         let text_trimmed = text.trim();
         if is_a_valid_attribute_value(text_trimmed) {
             let inside_bracket = &text_trimmed[1..text_trimmed.len() - 1];
@@ -188,21 +207,11 @@ pub mod evaluator_mod {
             return Err(attribute_value_variant_result.unwrap_err());
         }
         let TextInfo { value, variant } = attribute_value_variant_result.unwrap();
-        let attr_value;
-        match variant {
-            AttributeTextVariant::Expression => {
-                let attr_value_result = evaluate_expression_and_string(value, current_component);
-                if attr_value_result.is_err() {
-                    return Err(attr_value_result.unwrap_err());
-                }
-                attr_value = attr_value_result.unwrap();
-            }
-            _ => {
-                attr_value = value;
-            }
+        let attr_value_result = variant.get_variant_as_string(value, current_component);
+        if attr_value_result.is_err() {
+            return Err(attr_value_result.unwrap_err());
         }
-
-        Ok(attr_value)
+        Ok(attr_value_result.unwrap())
     }
 
     /// Evaluates the given text value in the context of provided component.

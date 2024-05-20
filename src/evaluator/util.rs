@@ -9,7 +9,7 @@ pub mod evaluator_util {
         return open_c == close_c;
     }
 
-    /// Performs a check on the wrapper chars of value of the attributes'.
+    /// Given a trimmed string input, checks whether it is wrapped inside curly brackets or not.
     pub fn is_a_valid_attribute_value(text: &str) -> bool {
         text.starts_with("{") && text.ends_with("}")
     }

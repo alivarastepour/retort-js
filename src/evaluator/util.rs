@@ -6,7 +6,7 @@ pub mod evaluator_util {
     pub fn has_valid_expression_inside(text: String) -> bool {
         let open_c = text.matches("{").count();
         let close_c = text.matches("}").count();
-        return open_c == close_c && open_c > 1;
+        return open_c == close_c && open_c > 0;
     }
 
     /// Given a trimmed string input, checks whether it is wrapped inside curly brackets or not.

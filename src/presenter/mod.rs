@@ -18,11 +18,12 @@ pub mod presenter_mod {
             return Err(Error::ParsingError(error_msg));
         }
         let component = line_parts[1].to_owned();
-        let path = line_parts[3].to_owned();
+        let mut path = line_parts[3].to_owned();
         if component.starts_with('{') || component.ends_with('}') {
             let error_msg = "Import format is wrong; you are most likely using named imports while currently only default exports are supported.".to_owned();
             return Err(Error::ParsingError(error_msg));
         }
+        path = path.replace("\"", "").replace(";", "");
         imports.insert(component, path);
         return Ok(());
     }
@@ -117,7 +118,7 @@ pub mod presenter_mod {
             assert!(
                 matches!(read_imports_result, Ok(_))
                     && imports.len() == 1
-                    && imports["Hello"] == "\"/some/path\";"
+                    && imports["Hello"] == "/some/path"
             );
         }
 
@@ -149,8 +150,8 @@ pub mod presenter_mod {
                 let expected = re.replace_all(&pre_markup, "").to_string();
                 assert!(
                     imports.len() == 2
-                        && imports["ByeWorld"] == "\"/test/ByeWorld/ByeWorld.js\";"
-                        && imports["Hello"] == "\"/test/Hello/Hello.js\";"
+                        && imports["ByeWorld"] == "/test/ByeWorld/ByeWorld.js"
+                        && imports["Hello"] == "/test/Hello/Hello.js"
                         && actual == expected
                 )
             } else {

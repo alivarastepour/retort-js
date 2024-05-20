@@ -37,7 +37,6 @@ pub mod parser_mod {
     /// Note that except for the root component, other modules which contain exported `Component` objects
     /// rely on being called from here; other than that, they won't be executed at all.
     pub async fn call_module_resolver(path: &str) -> Result<Component, CustomError> {
-        let path = path.replace("\"", "").replace(";", "");
         let promise = module_resolver(&path);
         let future = JsFuture::from(promise);
         let result = future.await;

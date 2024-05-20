@@ -6,7 +6,7 @@ pub mod component_mod {
 
     use crate::{
         dom::dom_mod::construct_dom_wrapper,
-        error::error_mod::{error_handler, Error as CustomError},
+        error::error_mod::{error_handler, Error},
         parser::parser_mod::{NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
@@ -85,19 +85,19 @@ pub mod component_mod {
             iter_arr.clone().collect()
         }
 
-        pub fn set_state_with_value(&mut self, new_state: JsValue) -> Result<(), CustomError> {
+        pub fn set_state_with_value(&mut self, new_state: JsValue) -> Result<(), Error> {
             let stringified_state = JSON::stringify(&new_state);
             if stringified_state.is_err() {
                 let error = stringified_state.unwrap_err();
                 let msg: String = from_value(error).unwrap_or(String::from(
                     "Invalid object format caused JSON::stringify to fail.",
                 ));
-                return Err(CustomError::TypeError(msg));
+                return Err(Error::TypeError(msg));
             }
 
             let new_state_string_result = stringified_state.unwrap().as_string();
             if new_state_string_result.is_none() {
-                return Err(CustomError::TypeError(String::from(
+                return Err(Error::TypeError(String::from(
                     "Failed to parse JsString into String.",
                 )));
             }
@@ -232,14 +232,14 @@ pub mod component_mod {
             &mut self,
             prev_state: &JsValue,
             callback: Function,
-        ) -> Result<(), CustomError> {
+        ) -> Result<(), Error> {
             let new_state_result = callback.call1(&JsValue::undefined(), &prev_state);
             if new_state_result.is_err() {
                 let msg_js_value = new_state_result.as_ref().unwrap_err();
                 let msg = JsValue::as_string(&msg_js_value).unwrap_or(String::from(
                     "Error occurred while setting the state of component.",
                 ));
-                let error = CustomError::EvaluationError(msg);
+                let error = Error::EvaluationError(msg);
                 return Err(error);
             }
             let new_state = new_state_result.unwrap();
@@ -280,7 +280,7 @@ pub mod component_mod {
         /// constructs a `VirtualNode` from its result, which corresponds to the current component's
         /// markup structure. An `Ok` variant is returned if nothing goes wrong, `Err` variant otherwise,
         /// explaining what went wrong.
-        async fn create_vdom(component: &mut Component) -> Result<(), CustomError> {
+        async fn create_vdom(component: &mut Component) -> Result<(), Error> {
             let presenter = &component.presenter;
             let parsed_presenter_result = parse_presenter(presenter);
             if let Result::Err(err) = parsed_presenter_result {

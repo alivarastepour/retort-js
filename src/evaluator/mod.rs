@@ -4,10 +4,17 @@ pub mod evaluator_mod {
 
     use super::js_evaluator::js_evaluator::get_state_props_evaluator;
     use super::util::evaluator_util::*;
-    use serde_wasm_bindgen::{from_value, to_value};
+    use serde_wasm_bindgen::from_value;
     use wasm_bindgen::JsValue;
 
-    use crate::{component::component_mod::Component, error::error_mod::Error};
+    use crate::{
+        component::component_mod::Component,
+        const_util::const_util_mod::{
+            is_input_close_curly_bracket, is_input_open_curly_bracket, NULL_LITERAL,
+            OPEN_CURLY_BRACKET, UNDEFINED_LITERAL,
+        },
+        error::error_mod::Error,
+    };
 
     #[derive(Debug)]
     pub enum AttributeTextVariant {
@@ -68,12 +75,12 @@ pub mod evaluator_mod {
             let converted = evaluated_expression.as_bool().unwrap();
             result = converted.to_string();
         } else if evaluated_expression.is_undefined() {
-            result = String::from("undefined");
+            result = String::from(UNDEFINED_LITERAL);
         } else if evaluated_expression.is_null() {
-            result = String::from("null");
+            result = String::from(NULL_LITERAL);
         } else {
             return Err(Error::EvaluationError(format!(
-                "The following text value didn't have any of the supported(number, boolean, string) types: {default}"
+                "The following text value didn't have any of the supported(number, boolean, string, undefined, null) types: {default}"
             )));
         }
         Ok(result)
@@ -124,9 +131,9 @@ pub mod evaluator_mod {
         let string_with_expression_chars: Vec<char> = string_with_expression.chars().collect();
         let mut expression_stack = Vec::new();
         for chr in string_with_expression_chars {
-            if chr == '{' {
-                expression_stack.push('{');
-            } else if chr == '}' {
+            if is_input_open_curly_bracket(chr) {
+                expression_stack.push(OPEN_CURLY_BRACKET);
+            } else if is_input_close_curly_bracket(chr) {
                 let head = expression_stack.pop();
                 if head.is_none() {
                     return Err(Error::ParsingError(format!("There was an error while parsing the following expression: {string_with_expression}. You have probably messed up some curly brackets.")));
@@ -233,7 +240,12 @@ pub mod evaluator_mod {
         use wasm_bindgen_test::*;
         use web_sys::js_sys::Array;
 
-        use crate::error::error_mod::Error;
+        use crate::{
+            const_util::const_util_mod::{
+                is_input_null_literal, is_input_true_literal, is_input_undefined_literal,
+            },
+            error::error_mod::Error,
+        };
 
         use super::*;
 
@@ -261,7 +273,7 @@ pub mod evaluator_mod {
             let evaluated_expression_string_result =
                 fill_evaluated_expression_string_result(js_value_result, js_expression);
             assert!(
-                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("null"))
+                matches!(evaluated_expression_string_result, Ok(val) if is_input_null_literal(&val))
             )
         }
 
@@ -274,7 +286,7 @@ pub mod evaluator_mod {
             let evaluated_expression_string_result =
                 fill_evaluated_expression_string_result(js_value_result, js_expression);
             assert!(
-                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("undefined"))
+                matches!(evaluated_expression_string_result, Ok(val) if is_input_undefined_literal(&val))
             )
         }
 
@@ -287,7 +299,7 @@ pub mod evaluator_mod {
             let evaluated_expression_string_result =
                 fill_evaluated_expression_string_result(js_value_result, js_expression);
             assert!(
-                matches!(evaluated_expression_string_result, Ok(val) if val == String::from("true"))
+                matches!(evaluated_expression_string_result, Ok(val) if is_input_true_literal(&val))
             )
         }
 
@@ -318,90 +330,15 @@ pub mod evaluator_mod {
         }
     }
 
-    // fn get_tag_content_variant(text: String) -> Result<(), Error> {
-    //     let collected_expression_and_string_result = extract_expression_and_string(text);
-    //     if collected_expression_and_string_result.is_err() {
-    //         return Err(collected_expression_and_string_result.unwrap_err());
-    //     }
-    //     let mut result: Vec<DeterminedTagContentTextVariant> = Vec::new();
-    //     let collected_expression_and_string = collected_expression_and_string_result.unwrap();
-    //     for value in collected_expression_and_string {
-    //         match value {
-    //             NonDeterminedTagContentTextVariant::Expression(exp) => {}
-    //             NonDeterminedTagContentTextVariant::Value(val) => {
-    //                 result.push(DeterminedTagContentTextVariant::Value(val))
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
-
-    // fn extract_expression_and_string(
-    //     string_with_expression: String,
-    // ) -> Result<Vec<NonDeterminedTagContentTextVariant>, Error> {
-    //     let string_with_expression_chars: Vec<char> = string_with_expression.chars().collect();
-    //     let mut result: Vec<NonDeterminedTagContentTextVariant> = Vec::new();
-    //     let mut expression_stack = Vec::new();
-    //     let mut current_expression: String = String::new();
-    //     let mut current_string: String = String::new();
-    //     for chr in string_with_expression_chars {
-    //         if chr == '{' {
-    //             expression_stack.push('{');
-    //             if !current_string.is_empty() {
-    //                 result.push(NonDeterminedTagContentTextVariant::Value(
-    //                     current_string.clone(),
-    //                 ));
-    //             }
-    //             current_string.clear();
-    //             current_expression += "{";
-    //         } else if chr == '}' {
-    //             let head = expression_stack.pop();
-    //             if head.is_none() {
-    //                 return Err(Error::ParsingError(format!("There was an error while parsing the following expression: {string_with_expression}. You have probably messed up some curly brackets.")));
-    //             }
-    //             current_expression += &chr.to_string();
-    //             if expression_stack.is_empty() {
-    //                 result.push(NonDeterminedTagContentTextVariant::Expression(
-    //                     current_expression.clone(),
-    //                 ));
-    //                 current_expression.clear();
-    //             }
-    //         } else {
-    //             if expression_stack.is_empty() {
-    //                 current_string += &chr.to_string();
-    //             } else {
-    //                 current_expression += &chr.to_string();
-    //             }
-    //         }
-    //     }
-    //     if !current_string.is_empty() {
-    //         result.push(NonDeterminedTagContentTextVariant::Value(
-    //             current_string.clone(),
-    //         ));
-    //     }
-    //     Ok(result)
-    // }
-
-    // #[derive(Debug, Clone)]
-    // pub enum NonDeterminedTagContentTextVariant {
-    //     Value(String),
-    //     Expression(String),
-    // }
-    // pub enum DeterminedTagContentTextVariant {
-    //     Value(String),
-    //     ExpressionNoTag(String),
-    //     ExpressionWithTag(String),
-    // }
-
     // tokenizer/parser
     //                                    what expression are commonly used within the context of jsx?
     // supported/not supported            1- callback registered using on`Event` attribute -> need to be explicitly imported in presenter
     // supported/not supported            2- attributes and props that are evaluated using a call to a function -> need to be explicitly imported in the presenter
-    // supported/not supported            3- passing states and props as they are -> ez
-    // supported/not supported            4- using operators(nullish coalescing, ternary operator, etc) to evaluate the value of an attribute or prop. -> new Function syntax
+    // supported/    supported            3- passing states and props as they are -> ez
+    // supported/    supported            4- using operators(nullish coalescing, ternary operator, etc) to evaluate the value of an attribute or prop. -> new Function syntax
     // won't be considered                5- constant values defined higher in the scope -> not gonna happen
-    // supported/not supported            6- primitive data types like string, number and boolean -> they'll be treated like expressions: new Function syntax
-    // supported/not supported            7- using operators to render jsx content conditionally
+    // supported/    supported            6- primitive data types like string, number and boolean -> they'll be treated like expressions: new Function syntax
+    // supported/    supported            7- using operators to render jsx content conditionally
     // supported/not supported            8- using map to render a list of data
 
     // handling 1:
@@ -437,20 +374,4 @@ pub mod evaluator_mod {
     // literal text and js expressions like conditional rendering and rendering lists using map.
     // or we can ignore this for the time being and assume that each tag has either literal text or
     // expressions and not both of them at the same time.
-
-    // how should we handle values inside tags?
-    // rn, they are all treated as Text, but they most obviously shouldn't.
-    // 1- given a Text variant, we need to determine how it should be treated, just like we did
-    //    with attributes.
-    // 2- why not the same functionality? because they differ. attributes are wrapped inside
-    //    curly brackets plus quotation marks, but Text inside tags is not.
-    // 3- so we should first determine the type; it can be one of the following:
-    //    - only value: <div>hello world</div>
-    //    - value with expression(no tag): <div>hello {state.value}</div>
-    //    - expression(no tag): <div>{state.value ? "hi" : "Bye"}</div>
-    //    - expression(with tag): <div>{state.value > 4 ? <span>xx</span> : <p>yx</p>}</div>
-    //    - nested tag expressions: <div>{state.value > 4 ? <span>xx</span> : <p>{state.value > 2 ? <span>aa</span> : <p>b</p>}</p>}</div>
-    // 4- what are complications? we can't directly evaluate expressions that contain tags.
-    // 5- so overall, we need to cover the following scenarios: only-value, value-expression-no-tag and
-    //    value-expression-tag
 }

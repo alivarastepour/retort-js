@@ -1,17 +1,18 @@
 /// Contains utility functions used in the process of evaluation
 pub mod evaluator_util {
+    use crate::const_util::const_util_mod::{CLOSE_CURLY_BRACKET, OPEN_CURLY_BRACKET};
 
     /// performs a look ahead search on the validity of JS expression. This requires using
     /// escape chars for special chars.
     pub fn has_valid_expression_inside(text: String) -> bool {
-        let open_c = text.matches("{").count();
-        let close_c = text.matches("}").count();
+        let open_c = text.matches(OPEN_CURLY_BRACKET).count();
+        let close_c = text.matches(CLOSE_CURLY_BRACKET).count();
         return open_c == close_c && open_c > 0;
     }
 
     /// Given a trimmed string input, checks whether it is wrapped inside curly brackets or not.
     pub fn is_a_valid_attribute_value(text: &str) -> bool {
-        text.starts_with("{") && text.ends_with("}")
+        text.starts_with(OPEN_CURLY_BRACKET) && text.ends_with(CLOSE_CURLY_BRACKET)
     }
 
     /// Returns true if `text` is convertible to number.

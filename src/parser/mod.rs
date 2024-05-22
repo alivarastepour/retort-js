@@ -3,6 +3,9 @@ pub mod parser_mod {
     use crate::component::component_mod::Component;
     use crate::const_util::const_util_mod::ATTRIBUTE_KEY_VALUE_SEPARATOR;
     use crate::error::error_mod::Error as CustomError;
+    use crate::evaluator::evaluator_mod::{
+        evaluate_attribute_value_to_raw_string, evaluate_text_value_to_raw_string,
+    };
     use crate::presenter::presenter_mod::ParsedPresenter;
     use crate::tokenizer::tokenizer_mod::{tokenizer, CurrentState, TokenizerState};
     use serde::{Deserialize, Serialize};
@@ -77,6 +80,7 @@ pub mod parser_mod {
     /// which contains a `VirtualNode` object.
     pub async fn parse_vdom_from_string(
         parsed_file: &ParsedPresenter,
+        component: &mut Component,
     ) -> Result<VirtualNode, CustomError> {
         let ParsedPresenter { imports, markup } = parsed_file;
         let mut get_next_token = tokenizer(markup.to_owned());
@@ -106,9 +110,15 @@ pub mod parser_mod {
                     }
                 }
                 TokenizerState::Text => {
-                    let tag = NodeType::Text(token);
+                    let evaluated_text_result =
+                        evaluate_text_value_to_raw_string(&token, &component);
+                    if evaluated_text_result.is_err() {
+                        return Err(evaluated_text_result.unwrap_err());
+                    }
+                    let text = evaluated_text_result.unwrap();
+                    let text = NodeType::Text(text);
                     let new_node = VirtualNode {
-                        node_type: tag,
+                        node_type: text,
                         attributes: HashMap::new(),
                         children: Vec::new(),
                     };
@@ -156,7 +166,15 @@ pub mod parser_mod {
                     let owner_node = stack.get_mut(stack_size - 1).unwrap();
                     let attrs = &mut owner_node.attributes;
                     let key_value_split = token.split_once(ATTRIBUTE_KEY_VALUE_SEPARATOR).unwrap();
-                    attrs.insert(key_value_split.0.to_owned(), key_value_split.1.to_owned());
+                    let attr_value_result = evaluate_attribute_value_to_raw_string(
+                        key_value_split.1.to_owned(),
+                        &component,
+                    );
+                    if attr_value_result.is_err() {
+                        return Err(attr_value_result.unwrap_err());
+                    }
+                    let attr_value = attr_value_result.unwrap();
+                    attrs.insert(key_value_split.0.to_owned(), attr_value);
                 }
                 TokenizerState::SelfClosingAngleBracket => {
                     let completed_node = stack.pop().unwrap();

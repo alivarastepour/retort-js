@@ -280,7 +280,7 @@ pub mod component_mod {
         /// constructs a `VirtualNode` from its result, which corresponds to the current component's
         /// markup structure. An `Ok` variant is returned if nothing goes wrong, `Err` variant otherwise,
         /// explaining what went wrong.
-        async fn create_vdom(component: &mut Component) -> Result<(), Error> {
+        async fn create_vdom(component: &mut Component) -> Result<VirtualNode, Error> {
             let presenter = &component.presenter;
             let parsed_presenter_result = parse_presenter(presenter);
             if let Result::Err(err) = parsed_presenter_result {
@@ -288,15 +288,14 @@ pub mod component_mod {
             }
             let parsed_presenter = parsed_presenter_result.unwrap();
 
-            let vdom_result = parse_vdom_from_string(&parsed_presenter).await;
+            let vdom_result = parse_vdom_from_string(&parsed_presenter, component).await;
 
             if let Result::Err(err) = vdom_result {
                 return Err(err);
             }
-            let virtual_node = vdom_result.unwrap();
-            component.set_vdom(&virtual_node);
+            let virtual_node: VirtualNode = vdom_result.unwrap();
 
-            Ok(())
+            Ok(virtual_node)
         }
 
         #[wasm_bindgen]
@@ -306,7 +305,10 @@ pub mod component_mod {
             if vdom_creation_result.is_err() {
                 let err = vdom_creation_result.unwrap_err();
                 error_handler(err);
+            } else {
+                self.set_vdom(&vdom_creation_result.unwrap());
             }
+
             return self.clone();
         }
 

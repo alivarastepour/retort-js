@@ -12,9 +12,6 @@ pub mod dom_mod {
             RENDER_ELSE_IF_ATTRIBUTE_NAME, RENDER_IF_ATTRIBUTE_NAME,
         },
         error::error_mod::Error,
-        evaluator::evaluator_mod::{
-            evaluate_attribute_value_to_raw_string, evaluate_text_value_to_raw_string,
-        },
         parser::parser_mod::{NodeType, VirtualNode},
     };
 
@@ -86,18 +83,11 @@ pub mod dom_mod {
     /// Adds attributes to the provided element. Note that attribute values are evaluated. Returns an
     /// `Err` if an error occurs during evaluation or setting attributes.
     fn add_attributes(
-        current_component: &Component,
         attributes: &HashMap<String, String>,
         element: &Element,
     ) -> Result<(), Error> {
         for (key, value) in attributes {
-            let attr_value_result =
-                evaluate_attribute_value_to_raw_string(value.to_owned(), current_component);
-            if attr_value_result.is_err() {
-                return Err(attr_value_result.unwrap_err());
-            }
-            let attr_value = attr_value_result.unwrap();
-            let set_attribute_result = element.set_attribute(key, &attr_value);
+            let set_attribute_result = element.set_attribute(key, &value);
             if set_attribute_result.is_err() {
                 return Err(Error::DomError(set_attribute_result.unwrap_err()));
             }
@@ -119,7 +109,7 @@ pub mod dom_mod {
         let mut if_state_expr: IfExprState = IfExprState::NotReached;
         for child in children {
             let render_node_result: Result<(bool, IfExprState), Error> =
-                should_node_render(child.clone(), if_state_expr, current_component);
+                should_node_render(child.clone(), if_state_expr);
             if render_node_result.is_err() {
                 return Err(render_node_result.unwrap_err());
             }
@@ -163,7 +153,7 @@ pub mod dom_mod {
         let new_element = new_element_result.unwrap();
 
         let attributes = &current_root.attributes;
-        let add_attributes_result = add_attributes(current_component, attributes, &new_element);
+        let add_attributes_result = add_attributes(attributes, &new_element);
         if add_attributes_result.is_err() {
             return Err(add_attributes_result.unwrap_err());
         }
@@ -179,16 +169,7 @@ pub mod dom_mod {
 
     /// Crates a text node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
-    fn construct_text(
-        text: &String,
-        parent: &Element,
-        current_component: &Component,
-    ) -> Result<(), Error> {
-        let evaluated_text_result = evaluate_text_value_to_raw_string(text, current_component);
-        if evaluated_text_result.is_err() {
-            return Err(evaluated_text_result.unwrap_err());
-        }
-        let text = evaluated_text_result.unwrap();
+    fn construct_text(text: &String, parent: &Element) -> Result<(), Error> {
         let text_element_result = Text::new_with_data(&text);
         if text_element_result.is_err() {
             return Err(Error::DomError(text_element_result.unwrap_err()));
@@ -209,7 +190,6 @@ pub mod dom_mod {
     fn should_node_render(
         current_root: VirtualNode,
         if_state_expr: IfExprState,
-        current_component: &Component,
     ) -> Result<(bool, IfExprState), Error> {
         let attrs = &current_root.attributes;
 
@@ -218,22 +198,15 @@ pub mod dom_mod {
         let else_ = attrs.get(RENDER_ELSE_ATTRIBUTE_NAME);
 
         if if_.is_some() {
-            let if_value = if_.unwrap();
-            let evaluated_if_value_result =
-                evaluate_attribute_value_to_raw_string(if_value.to_owned(), current_component);
-            if evaluated_if_value_result.is_ok() {
-                let evaluated_if_value: String = evaluated_if_value_result.unwrap();
-                let res = is_input_true_literal(&evaluated_if_value);
-                let new_state;
-                if res {
-                    new_state = IfExprState::True;
-                } else {
-                    new_state = IfExprState::False;
-                }
-                return Ok((res, new_state));
+            let evaluated_if_value = if_.unwrap();
+            let res = is_input_true_literal(&evaluated_if_value);
+            let new_state;
+            if res {
+                new_state = IfExprState::True;
             } else {
-                return Err(evaluated_if_value_result.unwrap_err());
+                new_state = IfExprState::False;
             }
+            return Ok((res, new_state));
         } else if else_if.is_some() {
             match if_state_expr {
                 IfExprState::False => {}
@@ -246,22 +219,15 @@ pub mod dom_mod {
                     )));
                 }
             }
-            let else_if_value = else_if.unwrap();
-            let evaluated_else_if_value_result =
-                evaluate_attribute_value_to_raw_string(else_if_value.to_owned(), current_component);
-            if evaluated_else_if_value_result.is_ok() {
-                let evaluated_else_if_value = evaluated_else_if_value_result.unwrap();
-                let res = is_input_true_literal(&evaluated_else_if_value);
-                let new_state;
-                if res {
-                    new_state = IfExprState::True;
-                } else {
-                    new_state = IfExprState::False;
-                }
-                return Ok((res, new_state));
+            let evaluated_else_if_value = else_if.unwrap();
+            let res = is_input_true_literal(&evaluated_else_if_value);
+            let new_state;
+            if res {
+                new_state = IfExprState::True;
             } else {
-                return Err(evaluated_else_if_value_result.unwrap_err());
+                new_state = IfExprState::False;
             }
+            return Ok((res, new_state));
         } else if else_.is_some() {
             match if_state_expr {
                 IfExprState::False => return Ok((true, IfExprState::NotReached)),
@@ -315,11 +281,8 @@ pub mod dom_mod {
         let res;
         match node_type {
             NodeType::Component(mut component) => {
-                let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
-                    *component.get_vdom().clone(),
-                    IfExprState::NotReached,
-                    &mut component,
-                );
+                let render_node_result: Result<(bool, IfExprState), Error> =
+                    should_node_render(*component.get_vdom().clone(), IfExprState::NotReached);
                 if render_node_result.is_err() {
                     return Err(render_node_result.unwrap_err());
                 }
@@ -348,7 +311,7 @@ pub mod dom_mod {
                 );
             }
             NodeType::Text(text) => {
-                res = construct_text(&text, parent, current_component);
+                res = construct_text(&text, parent);
             }
         }
         return res;
@@ -369,11 +332,8 @@ pub mod dom_mod {
         let document = document_result.unwrap();
         let parent = parent_result.unwrap();
 
-        let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
-            *root_component.get_vdom().clone(),
-            IfExprState::NotReached,
-            root_component,
-        );
+        let render_node_result: Result<(bool, IfExprState), Error> =
+            should_node_render(*root_component.get_vdom().clone(), IfExprState::NotReached);
         if render_node_result.is_err() {
             return Err(render_node_result.unwrap_err());
         }

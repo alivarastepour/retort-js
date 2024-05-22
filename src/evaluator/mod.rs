@@ -214,7 +214,7 @@ pub mod evaluator_mod {
             return Ok(text_info);
         }
         return Err(Error::ParsingError(format!(
-            "The following text value didn't have any of the supported types: {text}"
+            "The following text value didn't have any of the supported types: `{text}`"
         )));
     }
 

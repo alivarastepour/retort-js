@@ -1,15 +1,13 @@
 pub mod tokenizer_mod {
-    use crate::error::error_mod::Error;
-
-    const OPEN_ANGLE_BRACKET: &str = "<";
-    const CLOSE_ANGLE_BRACKET: &str = ">";
-    const FORWARD_SLASH: &str = "/";
-    const SELF_CLOSING_TAG: &str = "/>";
-    const CLOSING_TAG: &str = "</";
-    const WHITESPACE_ALIAS: &str = "";
-    const PROP_KEY_VALUE_SEPARATOR: &str = "=";
-    const OPEN_CURLY_BRACKET: &str = "{";
-    const CLOSE_CURLY_BRACKET: &str = "}";
+    use crate::{
+        const_util::const_util_mod::{
+            is_input_attribute_key_value_separator, is_input_close_angle_bracket,
+            is_input_close_curly_bracket, is_input_forward_slash, is_input_open_angle_bracket,
+            is_input_open_curly_bracket, is_input_white_space_alias, CLOSING_TAG,
+            OPEN_ANGLE_BRACKET, SELF_CLOSING_TAG,
+        },
+        error::error_mod::Error,
+    };
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum TokenizerState {
@@ -49,7 +47,7 @@ pub mod tokenizer_mod {
             update_starting_tag_index(index, max, markup);
             let current_string = markup[*index].to_string();
             let current = current_string.trim();
-            if current == FORWARD_SLASH {
+            if is_input_forward_slash(current) {
                 let res = CurrentState {
                     token: CLOSING_TAG.to_owned(),
                     state: TokenizerState::ClosingAngleBracket,
@@ -59,7 +57,7 @@ pub mod tokenizer_mod {
             *index = temp;
             let res = CurrentState {
                 state: TokenizerState::OpenAngleBracket,
-                token: OPEN_ANGLE_BRACKET.to_owned(),
+                token: OPEN_ANGLE_BRACKET.to_string(),
             };
             return Ok(res);
         } else {
@@ -103,9 +101,9 @@ pub mod tokenizer_mod {
                 };
                 return Ok(res);
             }
-            let current = markup[*index].to_string();
-            if current != OPEN_ANGLE_BRACKET {
-                text.push_str(&current);
+            let current = markup[*index];
+            if !is_input_open_angle_bracket(current) {
+                text.push(current);
             } else {
                 return get_state_after_open_angle_bracket(text, index, markup);
             }
@@ -122,7 +120,7 @@ pub mod tokenizer_mod {
             }
             let current_string = markup[*index].to_string();
             let current = current_string.trim();
-            if current != WHITESPACE_ALIAS {
+            if !is_input_white_space_alias(current) {
                 break;
             }
             *index += 1;
@@ -135,10 +133,11 @@ pub mod tokenizer_mod {
     /// called the `update_starting_tag_index` before calling this function.
     fn update_starting_tag_name(index: &mut usize, tag_name: &mut String, markup: &Vec<char>) {
         loop {
-            let mut current = markup[*index].to_string();
-            current = current.trim().to_owned();
-            if current != WHITESPACE_ALIAS && current != CLOSE_ANGLE_BRACKET {
-                tag_name.push_str(&current);
+            let current = markup[*index];
+            if !is_input_white_space_alias(&current.to_string().trim())
+                && !is_input_close_angle_bracket(current)
+            {
+                tag_name.push(current);
                 *index += 1;
             } else {
                 *index -= 1; // `index` is decremented because we now stand at a whitespace alias char or `>`; but index must point to the last char of tag's name.
@@ -238,10 +237,10 @@ pub mod tokenizer_mod {
             }
             let mut current = markup[*index].to_string(); // TODO: generalize this shit
             current = current.trim().to_owned();
-            if current != WHITESPACE_ALIAS {
+            if !is_input_white_space_alias(&current) {
                 key.push_str(&current);
             }
-            if current == PROP_KEY_VALUE_SEPARATOR {
+            if is_input_attribute_key_value_separator(&current) {
                 break;
             }
             *index += 1;
@@ -258,8 +257,8 @@ pub mod tokenizer_mod {
         let max = markup.len();
         update_starting_tag_index(index, max, markup);
 
-        let value_wrapper = markup[*index].to_string();
-        if value_wrapper != OPEN_CURLY_BRACKET {
+        let value_wrapper = markup[*index];
+        if !is_input_open_curly_bracket(value_wrapper) {
             let err = Error::ParsingError(format!("Value of props and attributes must be wrapped around curly brackets. Provided char was {value_wrapper}"));
             return Err(err);
         }
@@ -272,12 +271,12 @@ pub mod tokenizer_mod {
                     "Expected a key-value pair, but reached the end of markup.".to_owned(),
                 ));
             }
-            let mut current = markup[*index].to_string(); // todo: generalize this shit
-            current = current.to_owned();
-            value.push_str(&current);
-            if current == OPEN_CURLY_BRACKET {
-                wrapper_stack.push(current);
-            } else if current == CLOSE_CURLY_BRACKET {
+
+            let current = markup[*index];
+            value.push_str(&current.to_string());
+            if is_input_open_curly_bracket(current) {
+                wrapper_stack.push(current.to_string());
+            } else if is_input_close_curly_bracket(current) {
                 wrapper_stack.pop();
             }
             if wrapper_stack.is_empty() {

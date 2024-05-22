@@ -7,6 +7,10 @@ pub mod dom_mod {
 
     use crate::{
         component::component_mod::{effects_runner, Component, Effects},
+        const_util::const_util_mod::{
+            is_input_true_literal, APP_WRAPPER_ID, RENDER_ELSE_ATTRIBUTE_NAME,
+            RENDER_ELSE_IF_ATTRIBUTE_NAME, RENDER_IF_ATTRIBUTE_NAME,
+        },
         error::error_mod::Error,
         evaluator::evaluator_mod::{
             evaluate_attribute_value_to_raw_string, evaluate_text_value_to_raw_string,
@@ -29,8 +33,6 @@ pub mod dom_mod {
         True,
         False,
     }
-
-    const APP_WRAPPER_ID: &str = "root";
 
     /// Returns an `Ok` variant if window object was found successfully; an `Err` variant otherwise.
     fn get_window() -> Result<Window, Error> {
@@ -73,7 +75,7 @@ pub mod dom_mod {
             ));
         }
         let document = document_result.unwrap();
-        let app_wrapper_option = document.get_element_by_id(self::APP_WRAPPER_ID);
+        let app_wrapper_option = document.get_element_by_id(APP_WRAPPER_ID);
         if app_wrapper_option.is_none() {
             return Err(Error::ReferenceError(format!("Could not find the root element. Make sure you have a root element with id of `{APP_WRAPPER_ID}`.")));
         }
@@ -210,9 +212,10 @@ pub mod dom_mod {
         current_component: &Component,
     ) -> Result<(bool, IfExprState), Error> {
         let attrs = &current_root.attributes;
-        let if_ = attrs.get("render-if");
-        let else_if = attrs.get("render-else-if");
-        let else_ = attrs.get("render-else");
+
+        let if_ = attrs.get(RENDER_IF_ATTRIBUTE_NAME);
+        let else_if = attrs.get(RENDER_ELSE_IF_ATTRIBUTE_NAME);
+        let else_ = attrs.get(RENDER_ELSE_ATTRIBUTE_NAME);
 
         if if_.is_some() {
             let if_value = if_.unwrap();
@@ -220,7 +223,7 @@ pub mod dom_mod {
                 evaluate_attribute_value_to_raw_string(if_value.to_owned(), current_component);
             if evaluated_if_value_result.is_ok() {
                 let evaluated_if_value: String = evaluated_if_value_result.unwrap();
-                let res = evaluated_if_value == "true";
+                let res = is_input_true_literal(&evaluated_if_value);
                 let new_state;
                 if res {
                     new_state = IfExprState::True;
@@ -238,9 +241,9 @@ pub mod dom_mod {
                     return Ok((false, if_state_expr));
                 }
                 IfExprState::NotReached => {
-                    return Err(Error::ParsingError(
-                        "Didn't expect a render-else-if attribute.".to_owned(),
-                    ));
+                    return Err(Error::ParsingError(format!(
+                        "Didn't expect a `{RENDER_ELSE_IF_ATTRIBUTE_NAME}` attribute."
+                    )));
                 }
             }
             let else_if_value = else_if.unwrap();
@@ -248,7 +251,7 @@ pub mod dom_mod {
                 evaluate_attribute_value_to_raw_string(else_if_value.to_owned(), current_component);
             if evaluated_else_if_value_result.is_ok() {
                 let evaluated_else_if_value = evaluated_else_if_value_result.unwrap();
-                let res = evaluated_else_if_value == "true";
+                let res = is_input_true_literal(&evaluated_else_if_value);
                 let new_state;
                 if res {
                     new_state = IfExprState::True;
@@ -264,9 +267,9 @@ pub mod dom_mod {
                 IfExprState::False => return Ok((true, IfExprState::NotReached)),
                 IfExprState::True => return Ok((false, IfExprState::NotReached)),
                 IfExprState::NotReached => {
-                    return Err(Error::ParsingError(
-                        "Didn't expect a `render-else` attribute.".to_owned(),
-                    ))
+                    return Err(Error::ParsingError(format!(
+                        "Didn't expect a `{RENDER_ELSE_ATTRIBUTE_NAME}` attribute."
+                    )))
                 }
             }
         }

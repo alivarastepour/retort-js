@@ -3,16 +3,9 @@ pub mod js_evaluator {
     use wasm_bindgen::prelude::wasm_bindgen;
     use web_sys::js_sys::Function;
 
-    const USE_STRICT: &str = "\"use strict\";";
-    const STATE_PARAMETER: &str = "state_";
-    const PROPS_PARAMETER: &str = "props_";
-
-    /// In JSON strings which contain arrays, `stringify` method is called twice
-    /// when converting. Since we need to call the `parse` as many times as we have called the `stringify`,
-    /// we must check whether the type of state is `object` or not after the first call to `parse`.
-    const CLOSURE: &str =
-        "let state=JSON.parse(state_);if(typeof state === 'string'){state=JSON.parse(state)}";
-    const RETURN: &str = "return ";
+    use crate::const_util::const_util_mod::{
+        CLOSURE, PROPS_PARAMETER, RETURN, STATE_PARAMETER, USE_STRICT,
+    };
 
     /// This block interfaces `window.Function` constructor to the rust environment.
     #[wasm_bindgen(js_namespace=window)]

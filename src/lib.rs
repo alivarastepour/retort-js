@@ -1,4 +1,5 @@
 mod component;
+mod const_util;
 mod dom;
 mod error;
 mod evaluator;

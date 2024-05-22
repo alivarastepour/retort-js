@@ -1,11 +1,17 @@
 /// provides functionality which is used to handle errors that occurred during any process.
 pub mod error_mod {
-    use serde_wasm_bindgen::{from_value, Error as SerdeWasmBindgenError};
     use std::fmt::Display;
     use wasm_bindgen::JsValue;
     use web_sys::{console::error_1, Document, Element};
 
-    use crate::dom::dom_mod::{get_app_wrapper, get_document};
+    use crate::{
+        const_util::const_util_mod::{
+            DOM_ERROR, ERROR_SUBTITLE, ERROR_SUBTITLE_STYLES, ERROR_WRAPPER_STYLES,
+            EVALUATION_ERROR, PARSING_ERROR, REFERENCE_ERROR, RESOLVE_ERROR,
+            SERDE_WASM_BINDGEN_ERROR, TYPE_ERROR, _INVESTIGATION_NEEDED_ERROR,
+        },
+        dom::dom_mod::{get_app_wrapper, get_document},
+    };
 
     #[derive(Debug)]
     /// An enum which contains different types of errors and their associated data(error objects, strings, etc).
@@ -51,14 +57,14 @@ pub mod error_mod {
     /// returns a string corresponding to `Error` variant.
     fn get_variant_text(error: &Error) -> String {
         match &error {
-            Error::DomError(_) => "DOM error".to_owned(),
-            Error::ParsingError(_) => "Parsing error".to_owned(),
-            Error::EvaluationError(_) => "Evaluation error".to_owned(),
-            Error::TypeError(_) => "Type error".to_owned(),
-            Error::_InvestigationNeeded(_) => "Unknown error".to_owned(),
-            Error::ReferenceError(_) => "Reference error".to_owned(),
-            Error::SerdeWasmBindgenError(_) => "Serialization error".to_owned(),
-            Error::ResolveError(_) => "Resolve error".to_owned(),
+            Error::DomError(_) => DOM_ERROR.to_owned(),
+            Error::ParsingError(_) => PARSING_ERROR.to_owned(),
+            Error::EvaluationError(_) => EVALUATION_ERROR.to_owned(),
+            Error::TypeError(_) => TYPE_ERROR.to_owned(),
+            Error::_InvestigationNeeded(_) => _INVESTIGATION_NEEDED_ERROR.to_owned(),
+            Error::ReferenceError(_) => REFERENCE_ERROR.to_owned(),
+            Error::SerdeWasmBindgenError(_) => SERDE_WASM_BINDGEN_ERROR.to_owned(),
+            Error::ResolveError(_) => RESOLVE_ERROR.to_owned(),
         }
     }
 
@@ -79,33 +85,15 @@ pub mod error_mod {
 
         let error_wrapper = error_wrapper_result.unwrap();
         let error_subtitle = error_subtitle_result.unwrap();
-        let error_wrapper_style_result = error_wrapper.set_attribute(
-            "style",
-            "
-            line-height:30px;
-            background-color:#570606;
-            font-family:sans-serif;
-            font-size:1.5rem;
-            padding:2rem;
-            color:#fff;
-            font-weight:700;
-            border-radius:8px
-            ",
-        );
-        let error_subtitle_style_result = error_subtitle.set_attribute(
-            "style",
-            "
-            color:#eee;
-            font-size:0.8rem;
-            font-family:sans-serif
-            ",
-        );
+        let error_wrapper_style_result = error_wrapper.set_attribute("style", ERROR_WRAPPER_STYLES);
+        let error_subtitle_style_result =
+            error_subtitle.set_attribute("style", ERROR_SUBTITLE_STYLES);
         if error_wrapper_style_result.is_err() || error_subtitle_style_result.is_err() {
             return;
         }
 
         error_wrapper.set_text_content(Some(&error.to_string()));
-        error_subtitle.set_text_content(Some("See console for more details"));
+        error_subtitle.set_text_content(Some(ERROR_SUBTITLE));
 
         let append_result = error_wrapper.append_child(&error_subtitle);
         if append_result.is_err() {
@@ -138,7 +126,10 @@ pub mod error_mod {
     #[cfg(test)]
     mod tests {
         use serde::{Deserialize, Serialize};
+        use serde_wasm_bindgen::{from_value, Error as SerdeWasmBindgenError};
         use wasm_bindgen_test::*;
+
+        use crate::const_util::const_util_mod::APP_WRAPPER_ID;
 
         use super::*;
         #[test]
@@ -218,7 +209,7 @@ pub mod error_mod {
             assert!(matches!(body_result, Some(_)));
             let body = body_result.unwrap();
 
-            let attribute_result = wrapper.set_attribute("id", "root");
+            let attribute_result = wrapper.set_attribute("id", APP_WRAPPER_ID);
             let append_result = body.append_child(&wrapper);
             assert!(matches!(attribute_result, Ok(_)) && matches!(append_result, Ok(_)));
 
@@ -229,7 +220,7 @@ pub mod error_mod {
             assert!(matches!(document_result, Ok(_)));
             let document = document_result.unwrap();
 
-            let root = document.get_element_by_id("root");
+            let root = document.get_element_by_id(APP_WRAPPER_ID);
             assert!(matches!(root, None));
 
             let error_wrapper_option_result = document.query_selector("body > div");

@@ -48,8 +48,8 @@ pub fn new(state: String, presenter: String) -> Component {
     }
 }
 ```
-Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed in the moment of `Component`
-initialization, are state and presenter.
+Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed at the moment of initialization, are `state` and `presenter`. `state` is normally a JavaScript object, and represents the state of a component. `presenter` is a string, which is basically the markup
+template for the component. Other properties are later added on demand using `setter` functions.
 
 #### Tokenizer module
 This module consists of 3 parts; utility functions, a publicly available wrapper function and unit tests for all previous functions. The wrapper function, `tokenizer`, takes a `String` as a parameter and returns a closure. Each successful call to the returened closuer will return the next tokenized value and its type, which is a variant of `TokenizerState` enum:

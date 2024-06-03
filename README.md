@@ -179,6 +179,9 @@ cargo test
 ```
 -->
 
+## Contribution
+This project hasn't reached a stable phase yet. If you are interested in participating, contact me directly.
+
 ## Outline
 - [x] Tokenizer
 - [x] Parser

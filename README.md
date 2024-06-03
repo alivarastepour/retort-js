@@ -5,10 +5,10 @@ applications. You can think of it as a minimal `Reactjs`.
 ### Rust? I only know JavaScript though.
 retort-js is written in rust, but that doesn't mean you should know *any* rust to use it. As mentioned earlier, `rust` code is complied to `wasm` and `.wasm` files
 can be used inside JavaScript modules(with a bit of glue code, courtesy of `wasm-bindgen`). So all a developer is interfaced with, is good old JavaScript.
-
+<!---
 ### JavaScript? I only know Rust though.
 That's even better. You could contribute to this project if you'd like by doing one of the items mentioned in `tbd` section.
-
+--->
 ## A deeper dive
 I'm going to get a little more technical here, explaining the general idea on how it works.
 #### Component module

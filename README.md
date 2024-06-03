@@ -119,6 +119,39 @@ This module provides utility functions to parse the `presenter` of a component. 
 This module consists of a driver function for the functionality provided by `tokenizer` module. the `parse_vdom_from_string` function transforms meaningless tokens
 into `VirtualNode` objects and returns a single virtual node.
 
+#### dom module
+This module provides functionality to build up the DOM according to the context of components and their VDOM representation:
+```rust
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum NodeType {
+    Component(Component), //component object
+    Tag(String),          // tag name
+    Text(String),         // text content
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VirtualNode {
+    pub node_type: NodeType,
+    pub attributes: HashMap<String, String>,
+    pub children: Vec<VirtualNode>,
+}
+```
+The `construct_dom` function will decide which utility function to call based on `NodeType` for current `VirtualNode` object.
+
+#### evaluator module
+This is one of the most imporant modules in retort. We saw earlier that retort supports usage of some types of expressions in `presenter`. The thing is, these
+expressions are JavaScript expressions and need to(are expected to) be evaluated with JavaScript runtime behaviors. So, after retort detects an expression, that
+expression is evaluated using the `new Function()` syntax. But that doesn't mean we are sending expression back and forth to JavaScript. This is done using one of
+the most exiciting features of `wasm-bindgen`:
+```rust
+#[wasm_bindgen(js_namespace=window)]
+extern "C" {
+    fn Function(arg1: String, arg2: String, function_string: String) -> Function;
+}
+```
+This syntax is basically empowering us to use the `new Function` syntax of JavaScript inside rust environment and get the same result. [Read more](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/Function) on what the
+`Function` constructor does in JavaScript and [why](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_direct_eval!) we are not using the `eval` function.
+
 ## Outline
 - [x] Tokenizer
 - [x] Parser
@@ -126,7 +159,7 @@ into `VirtualNode` objects and returns a single virtual node.
 - [x] DOM initialization
 - [x] Conditional rendering
 - [ ] Rendering lists
-- [x] Prop handling 
+- [ ] Prop handling 
 - [x] Error handling
 - [ ] effect handling -> on going
 - [ ] state management -> on going

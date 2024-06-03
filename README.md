@@ -152,6 +152,11 @@ extern "C" {
 This syntax is basically empowering us to use the `new Function` syntax of JavaScript inside rust environment and get the same result. [Read more](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/Function) on what the
 `Function` constructor does in JavaScript and [why](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_direct_eval!) we are not using the `eval` function.
 
+#### Error module
+This is mostly a module to improve DX. It visualizes the encountered errors during developement for the developer:
+![image](https://github.com/alivarastepour/retort-js/assets/81034797/8e1ec052-8bc8-41c1-8a9d-38bd8b923eac)
+
+
 ## Outline
 - [x] Tokenizer
 - [x] Parser

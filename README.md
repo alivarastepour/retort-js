@@ -11,6 +11,24 @@ That's even better. You could contribute to this project if you'd like by doing 
 
 ## Dive deeper
 I'm going to get a little more technical here, explaining how it all works.
+#### Tokenizer module
+This module consists of 3 parts; utility functions, a publicly available wrapper function and unit tests for all previous functions. The wrapper function, `tokenizer`, takes a `String` as a parameter and returns a closure. Each successful call to the returened closuer will return the next tokenized value and its type, which is a variant of `TokenizerState` enum:
+```rust
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenizerState {
+    Uninitialized,
+    OpenAngleBracket,        // <
+    CloseAngleBracket,       // >
+    SelfClosingAngleBracket, // />
+    ClosingAngleBracket,     // </
+    TagNameOpen,
+    TagNameClose,
+    Component,
+    Props,
+    Text,
+    Finalized,
+}
+```
 
 
 ## Outline

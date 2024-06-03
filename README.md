@@ -69,8 +69,8 @@ import HelloWorld from "/test/HelloWorld/HelloWorld.js";
   <HelloWorld />
 </main> 
 ```
-An important thing to notice here is the use of curly brackets to indicate use of state or prop value. Other kinds of variables like those defined with `const` keyword or event callbackss like `onclick={callback}` are not yet supported.
-Other properties are later added on demand using `setter` functions; for instance, the following function let's you register a callback which will be called
+An important thing to notice here is the use of curly brackets to indicate use of state or prop value. Other kinds of variables like those defined with `const` keyword or event callbacks like `onclick={callback}` are not yet supported.
+Other properties are later added on demand using `setter` functions; for instance, the following function allows you to register a callback which will be called
 when component mounts:
 ```rust
 #[wasm_bindgen]
@@ -93,6 +93,7 @@ component.register_component_did_mount(
 Other than the `Component` struct, this module has 2 other publicly available members; `mount` and `render`. `mount` is used only on the root node and is basically
 the starting point of our applications written with retort. `render` though, must be called for every component that is going to be used in the application, because
 it creates and populates the VDOM representation of the component, the one that we left out during the initialization of our component.
+
 #### Tokenizer module
 This module consists of 3 parts; utility functions, a publicly available wrapper function and unit tests for all previous functions. The wrapper function, `tokenizer`, takes a `String` as a parameter and returns a closure. Each successful call to the returened closuer will return the next tokenized value and its type, which is a variant of `TokenizerState` enum:
 ```rust
@@ -112,9 +113,11 @@ pub enum TokenizerState {
 }
 ```
 #### Presenter module
+This module provides utility functions to parse the `presenter` of a component. Each presenter consists of at most 2 parts; the import statements and the markup template.
+
 #### Parser module
 This module consists of a driver function for the functionality provided by `tokenizer` module. the `parse_vdom_from_string` function transforms meaningless tokens
-into `VirtualNode` objects and returns a single virtual node, which is the root of our DOM hierarchy.
+into `VirtualNode` objects and returns a single virtual node.
 
 ## Outline
 - [x] Tokenizer

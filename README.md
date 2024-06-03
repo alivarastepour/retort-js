@@ -51,18 +51,17 @@ pub fn new(state: String, presenter: String) -> Component {
 Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed at the moment of initialization, are `state` and `presenter`. `state` is normally a JavaScript object, and represents the state of a component. they are updated on predefined events using the following method:
 ```rust
 #[wasm_bindgen]
-pub fn set_state(&mut self, callback: Function)
+pub fn set_state(&mut self, callback: Function) // Function type, from js_sys. represents a JavaScript callback.
 ```
 which in JavaScript, would look like:
 ```JavaScript
  fetch(`https://jsonplaceholder.typicode.com/todos/${state.age}`)
    .then((res) => res.json())
-   .then((res) => component.set_state((p) => ({ ...p, info: res })));
+   .then((res) => component.set_state((prevState) => ({ ...prevState, info: res })));
 ```
 as you can see, the `set_state` function on `Component` instances take a callback which its parameter is current state of component. Pretty JavaScript-ish!
 
-`presenter` is a string, which is basically the markup
-template for the component. A valid presenter may look like this:
+`presenter` is a string, which is basically the markup template for the component. A valid presenter may look like this:
 ```
 import HelloWorld from "/test/HelloWorld/HelloWorld.js";
 <main>
@@ -70,8 +69,30 @@ import HelloWorld from "/test/HelloWorld/HelloWorld.js";
   <HelloWorld />
 </main> 
 ```
-Other properties are later added on demand using `setter` functions.
+An important thing to notice here is the use of curly brackets to indicate use of state or prop value. Other kinds of variables like those defined with `const` keyword or event callbackss like `onclick={callback}` are not yet supported.
+Other properties are later added on demand using `setter` functions; for instance, the following function let's you register a callback which will be called
+when component mounts:
+```rust
+#[wasm_bindgen]
+pub fn register_component_did_mount(&mut self, callback: Function)
+```
+example usage:
+```JavaScript
+component.register_component_did_mount(
+(intialProps, props, initialState, state) => {
+  const element = document.getElementById("click");
+  if (!element) return;
+  element.addEventListener("click", clickCallback);
 
+  function clickCallback() {
+    component.set_state((prev) => ({ ...prev, age: prev.age + 1 }));
+  }
+}
+);
+```
+Other than the `Component` struct, this module has 2 other publicly available members; `mount` and `render`. `mount` is used only on the root node and is basically
+the starting point of our applications written with retort. `render` though, must be called for every component that is going to be used in the application, because
+it creates and populates the VDOM representation of the component, the one that we left out during the initialization of our component.
 #### Tokenizer module
 This module consists of 3 parts; utility functions, a publicly available wrapper function and unit tests for all previous functions. The wrapper function, `tokenizer`, takes a `String` as a parameter and returns a closure. Each successful call to the returened closuer will return the next tokenized value and its type, which is a variant of `TokenizerState` enum:
 ```rust

@@ -11,7 +11,7 @@ That's even better. You could contribute to this project if you'd like by doing 
 --->
 ## A deeper dive
 I'm going to get a little more technical here, explaining the general idea on how it works.
-#### Component module
+#### Component module*
 Component module is the only module which user directly interacts with. The `Component` struct and its constructor are the most important bits in this module:
 ```rust
 #[derive(Serialize, Deserialize, Debug)]
@@ -116,11 +116,11 @@ pub enum TokenizerState {
 #### Presenter module
 This module provides utility functions to parse the `presenter` of a component. Each presenter consists of at most 2 parts; the import statements and the markup template.
 
-#### Parser module
+#### Parser module*
 This module consists of a driver function for the functionality provided by `tokenizer` module. the `parse_vdom_from_string` function transforms meaningless tokens
 into `VirtualNode` objects and returns a single virtual node.
 
-#### dom module
+#### dom module*
 This module provides functionality to build up the DOM according to the context of components and their VDOM representation:
 ```rust
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -157,6 +157,8 @@ This syntax is basically empowering us to use the `new Function` syntax of JavaS
 This is a module to improve DX. It visualizes the encountered errors during developement for the developer:
 ![image](https://github.com/alivarastepour/retort-js/assets/81034797/8e1ec052-8bc8-41c1-8a9d-38bd8b923eac)
 
+
+*->these modules are not yet stable.
 <!---
 ### Contribution
 If you are enthusiastic about Rust, or have knowledge both on Rust and on modern front-end libraries(any library would probably do) You are more than welcome to

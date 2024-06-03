@@ -11,6 +11,46 @@ That's even better. You could contribute to this project if you'd like by doing 
 
 ## Dive deeper
 I'm going to get a little more technical here, explaining how it all works.
+#### Component module
+Component module is the only module which user directly interacts with. The `Component` struct and its constructor are the most important bits in this module:
+```rust
+#[derive(Serialize, Deserialize, Debug)]
+#[wasm_bindgen]
+pub struct Component {
+    state: String,
+    presenter: String,
+    props: String,
+    vdom: Box<VirtualNode>,
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    effects: Array,
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    component_did_mount: Array,
+    #[serde(with = "serde_wasm_bindgen::preserve")]
+    component_will_unmount: Array,
+}
+
+#[wasm_bindgen(constructor)]
+pub fn new(state: String, presenter: String) -> Component {
+    let empty_vdom = Box::new(VirtualNode {
+        // no need to have a valid vdom at this point
+        attributes: HashMap::new(),
+        children: Vec::new(),
+        node_type: NodeType::Tag(" ".to_owned()),
+    });
+    Component {
+        state,
+        presenter,
+        props: "{}".to_owned(),
+        vdom: empty_vdom,
+        effects: Array::new(),
+        component_will_unmount: Array::new(),
+        component_did_mount: Array::new(),
+    }
+}
+```
+Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed in the moment of `Component`
+initialization, are state and presenter.
+
 #### Tokenizer module
 This module consists of 3 parts; utility functions, a publicly available wrapper function and unit tests for all previous functions. The wrapper function, `tokenizer`, takes a `String` as a parameter and returns a closure. Each successful call to the returened closuer will return the next tokenized value and its type, which is a variant of `TokenizerState` enum:
 ```rust
@@ -29,7 +69,10 @@ pub enum TokenizerState {
     Finalized,
 }
 ```
-
+#### Presenter module
+#### Parser module
+This module consists of a driver function for the functionality provided by `tokenizer` module. the `parse_vdom_from_string` function transforms meaningless tokens
+into `VirtualNode` objects and returns a single virtual node, which is the root of our DOM hierarchy.
 
 ## Outline
 - [x] Tokenizer

@@ -9,8 +9,8 @@ can be used inside JavaScript modules(with a bit of glue code, courtesy of `wasm
 ### JavaScript? I only know Rust though.
 That's even better. You could contribute to this project if you'd like by doing one of the items mentioned in `tbd` section.
 
-## Dive deeper
-I'm going to get a little more technical here, explaining how it all works.
+## A deeper dive
+I'm going to get a little more technical here, explaining the general idea on how it works.
 #### Component module
 Component module is the only module which user directly interacts with. The `Component` struct and its constructor are the most important bits in this module:
 ```rust
@@ -48,7 +48,7 @@ pub fn new(state: String, presenter: String) -> Component {
     }
 }
 ```
-Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed at the moment of initialization, are `state` and `presenter`. `state` is normally a JavaScript object, and represents the state of a component. they are updated on predefined events using the following method:
+Using objects of this struct, a user can create `Component` objects in JavaScript. As you can see, the only properties which are needed at the moment of initialization, are `state` and `presenter`. `state` is normally a JavaScript object, and represents the state of a component. It is updated on predefined events using the following method:
 ```rust
 #[wasm_bindgen]
 pub fn set_state(&mut self, callback: Function) // Function type, from js_sys. represents a JavaScript callback.
@@ -70,6 +70,7 @@ import HelloWorld from "/test/HelloWorld/HelloWorld.js";
 </main> 
 ```
 An important thing to notice here is the use of curly brackets to indicate use of state or prop value. Other kinds of variables like those defined with `const` keyword or event callbacks like `onclick={callback}` are not yet supported.
+
 Other properties are later added on demand using `setter` functions; for instance, the following function allows you to register a callback which will be called
 when component mounts:
 ```rust
@@ -90,7 +91,7 @@ component.register_component_did_mount(
 }
 );
 ```
-Other than the `Component` struct, this module has 2 other publicly available members; `mount` and `render`. `mount` is used only on the root node and is basically
+Other than the `Component` struct, this module has 2 other publicly available members; `mount` and `render`. `mount` is used only on the root component and is basically
 the starting point of our applications written with retort. `render` though, must be called for every component that is going to be used in the application, because
 it creates and populates the VDOM representation of the component, the one that we left out during the initialization of our component.
 

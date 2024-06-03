@@ -157,6 +157,24 @@ This syntax is basically empowering us to use the `new Function` syntax of JavaS
 This is a module to improve DX. It visualizes the encountered errors during developement for the developer:
 ![image](https://github.com/alivarastepour/retort-js/assets/81034797/8e1ec052-8bc8-41c1-8a9d-38bd8b923eac)
 
+### Contribution
+If you are enthusiastic about Rust, or have knowledge both on Rust and on modern front-end libraries(any library would probably do) You are more than welcome to
+contribute to this project.
+
+You can:
+- write unit tests for modules that are not tested.
+- Help out on compeleting tasks in the Outline section
+
+### Run locally
+In order to run this project on your machine, you need to have [`Rust`](https://www.rust-lang.org/tools/install) toolchain and [`wasm-pack`](https://rustwasm.github.io/wasm-pack/installer/) installed. Then clone the repo and run:
+```shell
+wasm-pack build --target web
+```
+and to run tests:
+```shell
+cargo test
+```
+
 
 ## Outline
 - [x] Tokenizer

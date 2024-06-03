@@ -48,8 +48,29 @@ pub fn new(state: String, presenter: String) -> Component {
     }
 }
 ```
-Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed at the moment of initialization, are `state` and `presenter`. `state` is normally a JavaScript object, and represents the state of a component. `presenter` is a string, which is basically the markup
-template for the component. Other properties are later added on demand using `setter` functions.
+Using objects of this struct, a user can create Component objects in JavaScript. As you can see, the only properies which are needed at the moment of initialization, are `state` and `presenter`. `state` is normally a JavaScript object, and represents the state of a component. they are updated on predefined events using the following method:
+```rust
+#[wasm_bindgen]
+pub fn set_state(&mut self, callback: Function)
+```
+which in JavaScript, would look like:
+```JavaScript
+ fetch(`https://jsonplaceholder.typicode.com/todos/${state.age}`)
+   .then((res) => res.json())
+   .then((res) => component.set_state((p) => ({ ...p, info: res })));
+```
+as you can see, the `set_state` function on `Component` instances take a callback which its parameter is current state of component. Pretty JavaScript-ish!
+
+`presenter` is a string, which is basically the markup
+template for the component. A valid presenter may look like this:
+```
+import HelloWorld from "/test/HelloWorld/HelloWorld.js";
+<main>
+  <h1>My name is {state.name} and i'm {state.age} years old.</h1>
+  <HelloWorld />
+</main> 
+```
+Other properties are later added on demand using `setter` functions.
 
 #### Tokenizer module
 This module consists of 3 parts; utility functions, a publicly available wrapper function and unit tests for all previous functions. The wrapper function, `tokenizer`, takes a `String` as a parameter and returns a closure. Each successful call to the returened closuer will return the next tokenized value and its type, which is a variant of `TokenizerState` enum:

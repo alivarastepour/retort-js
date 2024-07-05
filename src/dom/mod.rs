@@ -112,14 +112,14 @@ pub mod dom_mod {
     /// Returns an `Err` variant if an `Err` variant is returned from any of the calls to `self::construct_dom`.
     fn add_children(
         children: &Vec<VirtualNode>,
-        current_component: &mut Component,
+        current_component: &Component,
         element: &Element,
         document: &Document,
     ) -> Result<(), Error> {
         let mut if_state_expr: IfExprState = IfExprState::NotReached;
         for child in children {
             let render_node_result: Result<(bool, IfExprState), Error> =
-                should_node_render(child.clone(), if_state_expr, current_component);
+                should_node_render(child, if_state_expr, &current_component);
             if render_node_result.is_err() {
                 return Err(render_node_result.unwrap_err());
             }
@@ -128,16 +128,15 @@ pub mod dom_mod {
             if !should_add {
                 continue;
             }
-            let node_type = child.node_type.clone();
+            let node_type = &child.node_type;
             let construct_result;
             match node_type {
-                NodeType::Component(mut component) => {
-                    construct_result =
-                        self::construct_dom(child.clone(), &mut component, &element, &document);
+                NodeType::Component(component) => {
+                    construct_result = self::construct_dom(child, &component, &element, &document);
                 }
                 _ => {
                     construct_result =
-                        self::construct_dom(child.clone(), current_component, &element, &document);
+                        self::construct_dom(child, &current_component, &element, &document);
                 }
             }
             if construct_result.is_err() {
@@ -150,8 +149,8 @@ pub mod dom_mod {
     /// Constructs a tag element from the given virtual node and appends it to the provided parent.
     /// Returns an `Err` variant which explains what went wrong, `Ok` otherwise.
     fn construct_tag(
-        current_root: VirtualNode,
-        current_component: &mut Component,
+        current_root: &VirtualNode,
+        current_component: &Component,
         parent: &Element,
         document: &Document,
         tag_name: String,
@@ -207,7 +206,7 @@ pub mod dom_mod {
     /// it returns an `Ok` variant which contains a tuple indicating if the node should be rendered, and
     /// the next state of `render-*` in the scope.
     fn should_node_render(
-        current_root: VirtualNode,
+        current_root: &VirtualNode,
         if_state_expr: IfExprState,
         current_component: &Component,
     ) -> Result<(bool, IfExprState), Error> {
@@ -276,7 +275,7 @@ pub mod dom_mod {
         return Ok((true, if_state_expr));
     }
 
-    fn run_mount_effects(component: &mut Component) -> Result<(), Error> {
+    fn run_mount_effects(component: &Component) -> Result<(), Error> {
         let prev_state = &component.state_parsed();
         let prev_props = &component.props_parsed();
         let did_mount_res = effects_runner(
@@ -291,34 +290,59 @@ pub mod dom_mod {
             prev_state,
             prev_props,
         );
-        match (did_mount_res, update_res) {
-            (Err(e1), Err(_)) | (Err(e1), Ok(_)) => {
-                return Err(e1);
-            }
-            (Ok(()), Err(e2)) => {
-                return Err(e2);
-            }
-            (Ok(()), Ok(())) => return Ok(()),
+
+        let mut x = update_res.unwrap();
+        while x {
+            let a = effects_runner(
+                Effects::ComponentDidUpdate,
+                component,
+                prev_state,
+                prev_props,
+            );
+            let b = a.unwrap();
+            x = b;
         }
+
+        Ok(())
+
+        // let mut i = 0;
+        // while i != 3 {
+        //     let update_res = effects_runner(
+        //         Effects::ComponentDidUpdate,
+        //         component,
+        //         prev_state,
+        //         prev_props,
+        //     );
+        //     i += 1;
+        // }
+        // match (did_mount_res, update_res) {
+        //     (Err(e1), Err(_)) | (Err(e1), Ok(_)) => {
+        //         return Err(e1);
+        //     }
+        //     (Ok(_), Err(e2)) => {
+        //         return Err(e2);
+        //     }
+        //     (Ok(_), Ok(_)) => return Ok(()),
+        // }
     }
 
     /// Constructs DOM using the provided virtual node and component as a root. Returns `Ok` variant
     /// if no errors are encountered while building DOM; an `Err` variant otherwise, explaining what
     /// went wrong.
     fn construct_dom(
-        current_root: VirtualNode,
-        current_component: &mut Component,
+        current_root: &VirtualNode,
+        current_component: &Component,
         parent: &Element,
         document: &Document,
     ) -> Result<(), Error> {
-        let node_type = current_root.node_type.clone();
+        let node_type = &current_root.node_type;
         let res;
         match node_type {
-            NodeType::Component(mut component) => {
+            NodeType::Component(component) => {
                 let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
-                    *component.get_vdom().clone(),
+                    component.get_vdom().as_ref(),
                     IfExprState::NotReached,
-                    &mut component,
+                    &component,
                 );
                 if render_node_result.is_err() {
                     return Err(render_node_result.unwrap_err());
@@ -327,25 +351,15 @@ pub mod dom_mod {
                 if !should_add {
                     return Ok(());
                 }
-                res = construct_dom(
-                    *component.get_vdom().clone(),
-                    &mut component,
-                    parent,
-                    document,
-                );
-                let initial_effect_call_result = run_mount_effects(&mut component);
+                res = construct_dom(component.get_vdom().as_ref(), &component, parent, document);
+                let initial_effect_call_result = run_mount_effects(&component);
                 if initial_effect_call_result.is_err() {
                     return Err(initial_effect_call_result.unwrap_err());
                 }
             }
             NodeType::Tag(tag_name) => {
-                res = construct_tag(
-                    current_root,
-                    current_component,
-                    parent,
-                    document,
-                    tag_name.to_owned(),
-                );
+                let a = tag_name.to_owned();
+                res = construct_tag(&current_root, current_component, parent, document, a);
             }
             NodeType::Text(text) => {
                 res = construct_text(&text, parent, current_component);
@@ -355,7 +369,7 @@ pub mod dom_mod {
     }
 
     /// Encapsulates the logic of preparing arguments for `self::construct_dom` function
-    pub fn construct_dom_wrapper(root_component: &mut Component) -> Result<(), Error> {
+    pub fn construct_dom_wrapper(root_component: &Component) -> Result<(), Error> {
         let document_result = get_document();
         if document_result.is_err() {
             return Err(document_result.unwrap_err());
@@ -370,7 +384,7 @@ pub mod dom_mod {
         let parent = parent_result.unwrap();
 
         let render_node_result: Result<(bool, IfExprState), Error> = should_node_render(
-            *root_component.get_vdom().clone(),
+            root_component.get_vdom().as_ref(),
             IfExprState::NotReached,
             root_component,
         );
@@ -383,7 +397,7 @@ pub mod dom_mod {
         }
 
         let construct_dom_result = construct_dom(
-            *root_component.get_vdom().clone(),
+            root_component.get_vdom().as_ref(),
             root_component,
             &parent,
             &document,

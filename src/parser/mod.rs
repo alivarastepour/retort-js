@@ -10,6 +10,7 @@ pub mod parser_mod {
     use std::collections::HashMap;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
+    use web_sys::console::log_1;
     use web_sys::js_sys::Promise;
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -40,6 +41,7 @@ pub mod parser_mod {
     pub async fn call_module_resolver(path: &str) -> Result<Component, CustomError> {
         let promise = module_resolver(&path);
         let future = JsFuture::from(promise);
+        // log_1(&JsValue::from_str("here"));
         let result = future.await;
         if let Result::Err(err) = &result {
             let msg = err.as_string();

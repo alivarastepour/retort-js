@@ -2,18 +2,19 @@ mod effects;
 
 pub mod component_mod {
 
-    use std::{collections::HashMap, ops::Deref};
+    use std::{collections::HashMap, mem::replace, ops::Deref};
 
     use crate::{
         dom::dom_mod::construct_dom_wrapper,
         error::error_mod::{error_handler, Error},
-        parser::parser_mod::{NodeType, VirtualNode},
+        parser::parser_mod::{call_module_resolver, NodeType, VirtualNode},
     };
     use serde::{Deserialize, Serialize};
     use serde_wasm_bindgen::{from_value, to_value};
+    use take_mut::take;
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     use web_sys::{
-        console::{time, time_end, time_end_with_label, time_with_label},
+        console::{log_1, time, time_end, time_end_with_label, time_with_label},
         js_sys::{Array, Function, JSON},
     };
 
@@ -59,6 +60,10 @@ pub mod component_mod {
             return &self.vdom;
         }
 
+        pub fn get_owned(&mut self) -> &Component {
+            return self;
+        }
+
         pub fn get_state<'a>(&'a self) -> &'a String {
             return &self.state;
         }
@@ -75,8 +80,8 @@ pub mod component_mod {
             return &self.effects;
         }
 
-        pub fn set_vdom(&mut self, v_node: &VirtualNode) {
-            self.vdom = Box::new(v_node.clone());
+        pub fn set_vdom(&mut self, v_node: VirtualNode) {
+            self.vdom = Box::new(v_node);
         }
 
         pub fn effect_arr_into_vec(&self) -> Vec<JsValue> {
@@ -192,6 +197,7 @@ pub mod component_mod {
 
         #[wasm_bindgen(getter)]
         pub fn presenter(&self) -> String {
+            log_1(&JsValue::from_str("a"));
             self.presenter.clone()
         }
 
@@ -263,17 +269,17 @@ pub mod component_mod {
             }
             // diffing algorithm, DOM update, VDOM update and all other shenanigan here.
             time();
-            let result = effects_runner(
-                Effects::ComponentDidUpdate,
-                self,
-                &prev_state,
-                &self.props_parsed(),
-            );
+            // let result = effects_runner(
+            //     Effects::ComponentDidUpdate,
+            //     self,
+            //     &prev_state,
+            //     &self.props_parsed(),
+            // );
             // let result = self.run_effects(&prev_state, &self.props_parsed());
             time_end();
-            if result.is_err() {
-                error_handler(result.unwrap_err());
-            }
+            // if result.is_err() {
+            //     error_handler(result.unwrap_err());
+            // }
         }
 
         /// Given a component object, parses its presenter using the `parse_presenter` function and then
@@ -294,7 +300,8 @@ pub mod component_mod {
                 return Err(err);
             }
             let virtual_node = vdom_result.unwrap();
-            component.set_vdom(&virtual_node);
+
+            component.set_vdom(virtual_node);
 
             Ok(())
         }
@@ -307,30 +314,34 @@ pub mod component_mod {
                 let err = vdom_creation_result.unwrap_err();
                 error_handler(err);
             }
-            return self.clone();
+            let a = replace(self, self.clone());
+            return a;
         }
 
         #[wasm_bindgen]
         /// constructs the DOM from a given entry point. This should be called from the component
         /// that wraps the entire component tree, otherwise a subtree of components will be added to DOM.
-        pub fn mount(&mut self) {
+        pub async fn mount(&self) {
             time_with_label("total render time:");
-
+            let mut a = call_module_resolver("/test/MyComponent/MyComponent.js")
+                .await
+                .unwrap();
+            a.set_presenter("<div>yedyedyedyedyed</div>".to_owned());
             // currently, root component is not being recognized as a `Component` object in vdom; this
             // introduces some problems to overall logic. So as a workaround, we change its `node_type` type manually
             // to `Component`. HOWEVER, i'm not sure this is the best solution.
 
-            self.set_vdom(&VirtualNode {
-                attributes: HashMap::new(), // root component should have no props.
-                children: Vec::new(),       // children for component in inheritably not supported
-                node_type: NodeType::Component(self.clone()), // change node type of root from Tag to Component
-            });
+            // self.set_vdom(VirtualNode {
+            //     attributes: HashMap::new(), // root component should have no props.
+            //     children: Vec::new(),       // children for component in inheritably not supported
+            //     node_type: NodeType::Component(self.clone()), // change node type of root from Tag to Component
+            // });
 
-            let res = construct_dom_wrapper(self);
+            // let res = construct_dom_wrapper(self);
             time_end_with_label("total render time:");
-            if res.is_err() {
-                error_handler(res.unwrap_err());
-            }
+            // if res.is_err() {
+            //     error_handler(res.unwrap_err());
+            // }
         }
     }
 }

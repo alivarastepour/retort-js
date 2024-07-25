@@ -10,7 +10,7 @@ pub mod const_util_mod {
     pub const TYPE_ERROR: &str = "Type error";
     pub const _INVESTIGATION_NEEDED_ERROR: &str = "Unknown error";
     pub const SERDE_WASM_BINDGEN_ERROR: &str = "Serialization error";
-    pub const RESOLVE_ERROR: &str = "Resolve error";
+    pub const RESOLVE_ERROR: &str = "Resolve error"; 
     pub const ERROR_WRAPPER_STYLES: &str = "
                                             line-height:30px;
                                             background-color:#570606;
